@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>{{ current_user.name.split()[0].title() }}'s Passwords</h2>
+
+{% if data %}
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Site</th>
+      <th>Username</th>
+      <th>Password</th>
+      <th>Show</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for entry, password in data %}
+    <tr>
+      <td>{{ entry.site }}</td>
+      <td>{{ entry.username }}</td>
+      <td>
+        <input type="password" class="form-control password-field" value="{{ password }}" readonly>
+      </td>
+      <td>
+        <button type="button" class="btn btn-sm btn-outline-secondary toggle-btn">👁</button>
+      </td>
+      <td>
+        <a href="{{ url_for('delete_entry', entry_id=entry.id) }}">Delete</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const toggleButtons = document.querySelectorAll('.toggle-btn');
+
+    toggleButtons.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const passwordInput = this.closest('tr').querySelector('.password-field');
+        if (passwordInput.type === 'password') {
+          passwordInput.type = 'text';
+          this.textContent = '🙈';
+        } else {
+          passwordInput.type = 'password';
+          this.textContent = '👁';
+        }
+      });
+    });
+  });
+</script>
+{% else %}
+<p>No passwords saved yet.</p>
+{% endif %}
+{% endblock %}

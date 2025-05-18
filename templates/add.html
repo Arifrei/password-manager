@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>Add New Password</h2>
+
+<form method="POST" class="needs-validation" novalidate>
+  <div class="mb-3">
+    {% for message in get_flashed_messages() %}
+      <p>{{ message }}</p>
+    {% endfor %}
+    <label for="site" class="form-label">Site or App</label>
+    <input type="text" class="form-control" id="site" name="site" required value="{{ request.form.site }}">
+    <div class="invalid-feedback">Please enter the site or app name.</div>
+  </div>
+  <div class="mb-3">
+    <label for="username" class="form-label">Username or Email</label>
+    <input type="text" class="form-control" id="username" name="username" required value="{{ request.form.username }}">
+    <div class="invalid-feedback">Please enter the username or email.</div>
+  </div>
+  <div class="mb-3">
+    <label for="password" class="form-label">Password</label>
+    <div class="input-group">
+      <input type="text" class="form-control" id="password" name="password" required value="{{ password }}">
+      <button type="submit" name="generate" value="1" class="btn btn-outline-secondary">Generate</button>
+    </div>
+    <div class="invalid-feedback">Please enter the password.</div>
+  </div>
+  <button type="submit" class="btn btn-primary">Save Password</button>
+</form>
+
+
+<script>
+// Bootstrap form validation
+(() => {
+  'use strict'
+  const forms = document.querySelectorAll('.needs-validation')
+  Array.from(forms).forEach(form => {
+    form.addEventListener('submit', event => {
+      if (!form.checkValidity()) {
+        event.preventDefault()
+        event.stopPropagation()
+      }
+      form.classList.add('was-validated')
+    }, false)
+  })
+})()
+</script>
+
+{% endblock %}

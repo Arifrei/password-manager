@@ -50,7 +50,7 @@ class Passwords(db.Model):
     __tablename__ = "passwords"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    site: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    site: Mapped[str] = mapped_column(String, nullable=False)
     username: Mapped[str] = mapped_column(String, nullable=False)
     password: Mapped[str] = mapped_column(LargeBinary, nullable=False)
     user: Mapped["Users"] = relationship(back_populates="passwords")
@@ -110,13 +110,15 @@ def home():
 def add_password():
     if request.method == "POST":
         form = request.form
-        exists = db.session.execute(db.select(Passwords).where(Passwords.site == form['site'])).scalar()
-        if "generate" in form:
+        action = form.get("action")
+        if action == "generate":
             password = pass_generator()
+            print(password)
             return render_template('add.html', password=password)
-        elif exists:
-            flash('The site/app you entered is already registered.')
-        else:
+        elif action == "save":
+            entries = db.session.execute(db.select(Passwords).where(Passwords.user_id == current_user.id)).scalars().all()
+            if any(entry.site == form['site'] for entry in entries):
+                flash('The site/app you entered is already registered.')
             new_entry = Passwords(
                 site=form['site'],
                 username=form['username'],
@@ -128,21 +130,8 @@ def add_password():
             return redirect(url_for('home'))
     return render_template('add.html')
 
-# @app.route("/edit-entry/<int:entry_id>", methods=["GET", "POST"])
-# def edit_entry(entry_id):
-#     post = db.get_or_404(Passwords, entry_id)
-#
-#     if edit_form.validate_on_submit():
-#         post.title = edit_form.title.data
-#         post.subtitle = edit_form.subtitle.data
-#         post.img_url = edit_form.img_url.data
-#         post.author = current_user
-#         post.body = edit_form.body.data
-#         db.session.commit()
-#         return redirect(url_for("show_post", post_id=post.id))
-#     return render_template("make-post.html", form=edit_form, is_edit=True)
-
 @app.route("/delete/<int:entry_id>")
+@login_required
 def delete_entry(entry_id):
     entry_to_delete = db.get_or_404(Passwords, entry_id)
     db.session.delete(entry_to_delete)
@@ -155,9 +144,16 @@ def logout():
     logout_user()
     return redirect(url_for('welcome'))
 
-letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']
-numbers = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
-symbols = ['!', '#', '$', '%', '&', '(', ')', '*', '+']
+@app.route("/example")
+def example():
+    info = db.session.execute(db.select(Passwords).where(Passwords.user_id == 1)).scalars().all()
+    password_list = [cipher.decrypt(p.password).decode() for p in info]
+    data = list(zip(info, password_list))
+    return render_template('example.html', data=data)
+
+letters = list("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+numbers = list("0123456789")
+symbols = list("!#$%&()*+")
 
 def pass_generator():
     password_list = []

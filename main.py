@@ -21,7 +21,7 @@ cipher = Fernet(key)
 class Base(DeclarativeBase):
     pass
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///passwords.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 db = SQLAlchemy(model_class=Base)
 db.init_app(app)
 
@@ -119,6 +119,7 @@ def add_password():
             entries = db.session.execute(db.select(Passwords).where(Passwords.user_id == current_user.id)).scalars().all()
             if any(entry.site == form['site'] for entry in entries):
                 flash('The site/app you entered is already registered.')
+                return redirect(url_for('add_password'))
             new_entry = Passwords(
                 site=form['site'],
                 username=form['username'],
@@ -150,6 +151,11 @@ def example():
     password_list = [cipher.decrypt(p.password).decode() for p in info]
     data = list(zip(info, password_list))
     return render_template('example.html', data=data)
+
+@app.route("/debug-db")
+def debug_db():
+    return f"Using DB: {app.config['SQLALCHEMY_DATABASE_URI']}"
+
 
 letters = list("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 numbers = list("0123456789")

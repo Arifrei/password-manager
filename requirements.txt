@@ -10,3 +10,4 @@ gunicorn~=21.2.0
 flask-sqlalchemy
 dotenv~=0.9.9
 python-dotenv~=1.1.0
+psycopg2-binary

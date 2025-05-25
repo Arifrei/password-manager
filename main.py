@@ -152,10 +152,6 @@ def example():
     data = list(zip(info, password_list))
     return render_template('example.html', data=data)
 
-@app.route("/debug-db")
-def debug_db():
-    return f"Using DB: {app.config['SQLALCHEMY_DATABASE_URI']}"
-
 
 letters = list("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 numbers = list("0123456789")

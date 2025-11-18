@@ -3,31 +3,34 @@
 {% block content %}
 <h2>Add New Password</h2>
 
-<form method="POST" class="needs-validation" novalidate>
-  <div class="mb-3">
-    {% for message in get_flashed_messages() %}
-      <p>{{ message }}</p>
-    {% endfor %}
-    <label for="site" class="form-label">Site or App</label>
-    <input type="text" class="form-control" id="site" name="site" required value="{{ request.form.site }}">
-    <div class="invalid-feedback">Please enter the site or app name.</div>
+<div class="card">
+  <div class="card-body">
+    <form method="POST" class="needs-validation" novalidate>
+      <div class="mb-3">
+        {% for message in get_flashed_messages() %}
+          <p class="flash-message">{{ message }}</p>
+        {% endfor %}
+        <label for="site" class="form-label">Site or App</label>
+        <input type="text" class="form-control" id="site" name="site" placeholder="e.g., Gmail, Facebook" required value="{{ request.form.site }}">
+        <div class="invalid-feedback">Please enter the site or app name.</div>
+      </div>
+      <div class="mb-3">
+        <label for="username" class="form-label">Username or Email</label>
+        <input type="text" class="form-control" id="username" name="username" placeholder="e.g., john@example.com" required value="{{ request.form.username }}">
+        <div class="invalid-feedback">Please enter the username or email.</div>
+      </div>
+      <div class="mb-3">
+        <label for="password" class="form-label">Password</label>
+        <div class="input-group">
+          <input type="text" class="form-control" id="password" name="password" placeholder="Enter or generate a password" required value="{{ password }}">
+          <button type="submit" name="action" value="generate" class="btn btn-outline-secondary" formnovalidate>🎲 Generate</button>
+        </div>
+        <div class="invalid-feedback">Please enter the password.</div>
+      </div>
+      <button type="submit" name="action" value="save" class="btn btn-primary">💾 Save Password</button>
+    </form>
   </div>
-  <div class="mb-3">
-    <label for="username" class="form-label">Username or Email</label>
-    <input type="text" class="form-control" id="username" name="username" required value="{{ request.form.username }}">
-    <div class="invalid-feedback">Please enter the username or email.</div>
-  </div>
-  <div class="mb-3">
-    <label for="password" class="form-label">Password</label>
-    <div class="input-group">
-      <input type="text" class="form-control" id="password" name="password" required value="{{ password }}">
-      <button type="submit" name="action" value="generate" class="btn btn-outline-secondary" formnovalidate>Generate</button>
-    </div>
-    <div class="invalid-feedback">Please enter the password.</div>
-  </div>
-  <button type="submit" name="action" value="save" class="btn btn-primary">Save Password</button>
-</form>
-
+</div>
 
 <script>
 (() => {
@@ -35,10 +38,8 @@
   const forms = document.querySelectorAll('.needs-validation');
   Array.from(forms).forEach(form => {
     form.addEventListener('submit', event => {
-      // `event.submitter` is the button that was clicked
       const submitter = event.submitter;
 
-      // Only run validation if button does NOT have `formnovalidate`
       if (!submitter || !submitter.hasAttribute('formnovalidate')) {
         if (!form.checkValidity()) {
           event.preventDefault();
@@ -51,6 +52,5 @@
   });
 })();
 </script>
-
 
 {% endblock %}

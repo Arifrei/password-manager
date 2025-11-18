@@ -2,9 +2,9 @@
 {% block title %}Welcome{% endblock %}
 
 {% block content %}
-<div class="text-center">
-  <h1 class="mb-4">Welcome to your Personal Password Manager</h1>
-  <p class="mb-4">Please choose an option to continue.</p>
+<div class="welcome-container">
+  <h1>Welcome to your Personal Password Manager</h1>
+  <p>Securely store and manage all your passwords in one place.</p>
   <div class="d-flex justify-content-center gap-3">
     <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg">Login</a>
     <a href="{{ url_for('register') }}" class="btn btn-outline-secondary btn-lg">Register</a>

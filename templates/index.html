@@ -4,33 +4,36 @@
 <h2>{{ current_user.name.split()[0].title() }}'s Passwords</h2>
 
 {% if data %}
-<table class="table table-striped">
-  <thead>
-    <tr>
-      <th>Site</th>
-      <th>Username</th>
-      <th>Password</th>
-      <th>Show</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for entry, password in data %}
-    <tr>
-      <td>{{ entry.site }}</td>
-      <td>{{ entry.username }}</td>
-      <td>
-        <input type="password" class="form-control password-field" value="{{ password }}" readonly>
-      </td>
-      <td>
-        <button type="button" class="btn btn-sm btn-outline-secondary toggle-btn">👁</button>
-      </td>
-      <td>
-        <a href="{{ url_for('delete_entry', entry_id=entry.id) }}">Delete</a>
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="table-container">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Site</th>
+        <th>Username</th>
+        <th>Password</th>
+        <th>Show</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry, password in data %}
+      <tr>
+        <td><strong>{{ entry.site }}</strong></td>
+        <td>{{ entry.username }}</td>
+        <td>
+          <input type="password" class="form-control password-field" value="{{ password }}" readonly>
+        </td>
+        <td>
+          <button type="button" class="btn btn-sm btn-outline-secondary toggle-btn">👁</button>
+        </td>
+        <td>
+          <a href="{{ url_for('delete_entry', entry_id=entry.id) }}">🗑️ Delete</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 
 <script>
   document.addEventListener('DOMContentLoaded', function () {
@@ -51,6 +54,9 @@
   });
 </script>
 {% else %}
-<p>No passwords saved yet.</p>
+<div class="empty-state">
+  <p>No passwords saved yet.</p>
+  <a href="{{ url_for('add_password') }}" class="btn btn-primary">Add Your First Password</a>
+</div>
 {% endif %}
 {% endblock %}

@@ -26,12 +26,24 @@
           <button type="button" class="btn btn-sm btn-outline-secondary toggle-btn">👁</button>
         </td>
         <td>
-          <a href="{{ url_for('delete_entry', entry_id=entry.id) }}">🗑️ Delete</a>
+          <a href="#" class="delete-btn" data-entry-id="{{ entry.id }}" data-site="{{ entry.site }}">🗑️ Delete</a>
         </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="deleteModal" class="modal">
+  <div class="modal-content">
+    <h3>Delete Password</h3>
+    <p id="deleteMessage">Are you sure you want to delete this password?</p>
+    <div class="modal-buttons">
+      <button id="cancelDelete" class="btn btn-outline-secondary">Cancel</button>
+      <button id="confirmDelete" class="btn btn-danger">Delete</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -49,6 +61,39 @@
           this.textContent = '👁';
         }
       });
+    });
+
+    // Delete confirmation modal
+    const modal = document.getElementById('deleteModal');
+    const deleteMessage = document.getElementById('deleteMessage');
+    const confirmBtn = document.getElementById('confirmDelete');
+    const cancelBtn = document.getElementById('cancelDelete');
+    let deleteUrl = '';
+
+    document.querySelectorAll('.delete-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        const entryId = this.getAttribute('data-entry-id');
+        const site = this.getAttribute('data-site');
+        deleteUrl = "{{ url_for('delete_entry', entry_id=0) }}".replace('0', entryId);
+        deleteMessage.textContent = `Are you sure you want to delete the password for ${site}? This action cannot be undone.`;
+        modal.style.display = 'flex';
+      });
+    });
+
+    confirmBtn.addEventListener('click', function() {
+      window.location.href = deleteUrl;
+    });
+
+    cancelBtn.addEventListener('click', function() {
+      modal.style.display = 'none';
+    });
+
+    // Close modal when clicking outside
+    window.addEventListener('click', function(e) {
+      if (e.target === modal) {
+        modal.style.display = 'none';
+      }
     });
   });
 </script>

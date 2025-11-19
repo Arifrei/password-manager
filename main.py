@@ -18,10 +18,20 @@ app.config["SECRET_KEY"] = os.getenv("FLASK_KEY")
 key = os.getenv("ENCRYPTION_KEY").encode()
 cipher = Fernet(key)
 
+
 class Base(DeclarativeBase):
     pass
 
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
+database_url = os.getenv('DATABASE_URL')
+if database_url:
+    if database_url.startswith('postgres://'):
+        database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+else:
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///passwords.db'
+
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
 db = SQLAlchemy(model_class=Base)
 db.init_app(app)
 
@@ -29,9 +39,11 @@ login_manager = LoginManager()
 login_manager.login_view = 'login'
 login_manager.init_app(app)
 
+
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(Users, user_id)
+
 
 class Users(db.Model, UserMixin):
     __tablename__ = "users"
@@ -46,6 +58,7 @@ class Users(db.Model, UserMixin):
         self.email = email
         self.password = password
 
+
 class Passwords(db.Model):
     __tablename__ = "passwords"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -55,12 +68,15 @@ class Passwords(db.Model):
     password: Mapped[str] = mapped_column(LargeBinary, nullable=False)
     user: Mapped["Users"] = relationship(back_populates="passwords")
 
+
 with app.app_context():
     db.create_all()
+
 
 @app.route("/")
 def welcome():
     return render_template('welcome.html')
+
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
@@ -73,15 +89,16 @@ def register():
         else:
             password = generate_password_hash(form['password'], 'pbkdf2:sha256', 6)
             new_user = Users(
-                name = form['name'],
-                email = form['email'],
-                password = password
+                name=form['name'],
+                email=form['email'],
+                password=password
             )
             db.session.add(new_user)
             db.session.commit()
             login_user(new_user)
             return redirect(url_for('home'))
     return render_template('register.html')
+
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -97,6 +114,7 @@ def login():
             return redirect(url_for('home'))
     return render_template('login.html')
 
+
 @app.route("/home")
 @login_required
 def home():
@@ -104,6 +122,7 @@ def home():
     password_list = [cipher.decrypt(p.password).decode() for p in info]
     data = list(zip(info, password_list))
     return render_template('index.html', data=data)
+
 
 @app.route("/add-password", methods=["GET", "POST"])
 @login_required
@@ -116,7 +135,8 @@ def add_password():
             print(password)
             return render_template('add.html', password=password)
         elif action == "save":
-            entries = db.session.execute(db.select(Passwords).where(Passwords.user_id == current_user.id)).scalars().all()
+            entries = db.session.execute(
+                db.select(Passwords).where(Passwords.user_id == current_user.id)).scalars().all()
             if any(entry.site == form['site'] for entry in entries):
                 flash('The site/app you entered is already registered.')
             new_entry = Passwords(
@@ -129,6 +149,7 @@ def add_password():
             db.session.commit()
             return redirect(url_for('home'))
     return render_template('add.html')
+
 
 @app.route("/delete/<int:entry_id>")
 @login_required
@@ -144,16 +165,49 @@ def logout():
     logout_user()
     return redirect(url_for('welcome'))
 
+
 @app.route("/example")
 def example():
-    info = db.session.execute(db.select(Passwords).where(Passwords.user_id == 1)).scalars().all()
-    password_list = [cipher.decrypt(p.password).decode() for p in info]
-    data = list(zip(info, password_list))
-    return render_template('example.html', data=data)
+    class ExampleEntry:
+        def __init__(self, entry_id, site, username, password_text):
+            self.site = site
+            self.username = username
+            self.id = entry_id
+
+    all_examples = [
+        (ExampleEntry(1, "Gmail", "john.doe@gmail.com", "ExamplePass123!"), "ExamplePass123!"),
+        (ExampleEntry(2, "Facebook", "johndoe@example.com", "SecureP@ssw0rd"), "SecureP@ssw0rd"),
+        (ExampleEntry(3, "Twitter", "@johndoe", "MyTw1tt3r!Pass"), "MyTw1tt3r!Pass"),
+        (ExampleEntry(4, "LinkedIn", "john.doe@example.com", "Pr0f3ssional#2024"), "Pr0f3ssional#2024"),
+    ]
+
+    # Get deleted IDs from session
+    from flask import session
+    deleted_ids = session.get('deleted_examples', [])
+
+    # Filter out deleted entries
+    example_data = [entry for entry in all_examples if entry[0].id not in deleted_ids]
+
+    return render_template('example.html', data=example_data)
+
+
+@app.route("/delete-example/<int:entry_id>")
+def delete_example(entry_id):
+    from flask import session
+    deleted_ids = session.get('deleted_examples', [])
+
+    if entry_id not in deleted_ids:
+        deleted_ids.append(entry_id)
+
+    session['deleted_examples'] = deleted_ids
+
+    return redirect(url_for('example'))
+
 
 letters = list("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 numbers = list("0123456789")
 symbols = list("!#$%&()*+")
+
 
 def pass_generator():
     password_list = []
@@ -162,7 +216,6 @@ def pass_generator():
     password_list += [choice(symbols) for _ in range(randint(2, 4))]
     shuffle(password_list)
     return "".join(password_list)
-
 
 
 if __name__ == "__main__":

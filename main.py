@@ -22,8 +22,13 @@ cipher = Fernet(key)
 class Base(DeclarativeBase):
     pass
 
+
+# Fix database URL for Neon/PostgreSQL compatibility
 database_url = os.getenv('DATABASE_URL')
-if database_url:
+if database_url and database_url.strip():
+    database_url = database_url.strip()
+    if database_url.startswith('"') or database_url.startswith("'"):
+        database_url = database_url.strip('"').strip("'")
     if database_url.startswith('postgres://'):
         database_url = database_url.replace('postgres://', 'postgresql://', 1)
     app.config['SQLALCHEMY_DATABASE_URI'] = database_url
@@ -168,12 +173,15 @@ def logout():
 
 @app.route("/example")
 def example():
+    # Hardcoded example data - no real user data exposed
+    # This creates fake password entries for demonstration purposes only
     class ExampleEntry:
         def __init__(self, entry_id, site, username, password_text):
             self.site = site
             self.username = username
             self.id = entry_id
 
+    # Create example entries with fake data
     all_examples = [
         (ExampleEntry(1, "Gmail", "john.doe@gmail.com", "ExamplePass123!"), "ExamplePass123!"),
         (ExampleEntry(2, "Facebook", "johndoe@example.com", "SecureP@ssw0rd"), "SecureP@ssw0rd"),
@@ -194,11 +202,14 @@ def example():
 @app.route("/delete-example/<int:entry_id>")
 def delete_example(entry_id):
     from flask import session
+    # Get current deleted list or create new one
     deleted_ids = session.get('deleted_examples', [])
 
+    # Add this ID to the deleted list
     if entry_id not in deleted_ids:
         deleted_ids.append(entry_id)
 
+    # Save back to session
     session['deleted_examples'] = deleted_ids
 
     return redirect(url_for('example'))

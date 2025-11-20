@@ -175,6 +175,52 @@ body {
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas', monospace;
   letter-spacing: 1px;
   font-size: 0.95rem;
+  padding-right: 5rem;
+}
+
+/* Password Input Wrapper with Inline Buttons */
+.password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.btn-icon-inline {
+  position: absolute;
+  background: none;
+  border: none;
+  padding: 0.5rem;
+  cursor: pointer;
+  color: var(--text-light);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+}
+
+.btn-icon-inline:hover {
+  color: var(--primary-color);
+  background: rgba(102, 126, 234, 0.1);
+}
+
+.btn-icon-inline:active {
+  transform: scale(0.95);
+}
+
+.btn-icon-inline svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Position toggle button (show/hide) */
+.toggle-btn {
+  right: 2.5rem;
+}
+
+/* Position copy button */
+.copy-btn {
+  right: 0.5rem;
 }
 
 .input-group {
@@ -848,4 +894,28 @@ h2 {
     transform: translateY(0);
     opacity: 1;
   }
+}
+
+/* Toast Notification */
+.toast {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
+  color: white;
+  padding: 1rem 2rem;
+  border-radius: 12px;
+  box-shadow: var(--shadow-xl);
+  font-weight: 600;
+  font-size: 1rem;
+  opacity: 0;
+  transition: all 0.3s ease;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }

@@ -71,6 +71,7 @@ class Passwords(db.Model):
     site: Mapped[str] = mapped_column(String, nullable=False)
     username: Mapped[str] = mapped_column(String, nullable=False)
     password: Mapped[str] = mapped_column(LargeBinary, nullable=False)
+    additional_fields: Mapped[str] = mapped_column(LargeBinary, nullable=True)  # Encrypted JSON for custom fields
     user: Mapped["Users"] = relationship(back_populates="passwords")
 
 
@@ -125,7 +126,17 @@ def login():
 def home():
     info = db.session.execute(db.select(Passwords).where(Passwords.user_id == current_user.id)).scalars().all()
     password_list = [cipher.decrypt(p.password).decode() for p in info]
-    data = list(zip(info, password_list))
+
+    # Decrypt additional fields if they exist
+    additional_fields_list = []
+    for p in info:
+        if p.additional_fields:
+            decrypted = cipher.decrypt(p.additional_fields).decode()
+            additional_fields_list.append(json.loads(decrypted))
+        else:
+            additional_fields_list.append([])
+
+    data = list(zip(info, password_list, additional_fields_list))
     return render_template('index.html', data=data)
 
 
@@ -138,16 +149,37 @@ def add_password():
         if action == "generate":
             password = pass_generator()
             print(password)
-            return render_template('add.html', password=password)
+            return render_template('add.html', password=password, form_data=form)
         elif action == "save":
             entries = db.session.execute(
                 db.select(Passwords).where(Passwords.user_id == current_user.id)).scalars().all()
             if any(entry.site == form['site'] for entry in entries):
                 flash('The site/app you entered is already registered.')
+
+            # Build additional fields list from form data
+            additional_fields = []
+            field_index = 0
+            while f'field_label_{field_index}' in form:
+                label = form.get(f'field_label_{field_index}')
+                value = form.get(f'field_value_{field_index}')
+                if label and value:  # Only add if both label and value exist
+                    additional_fields.append({
+                        'label': label,
+                        'value': value
+                    })
+                field_index += 1
+
+            # Encrypt additional fields as JSON if any exist
+            additional_fields_encrypted = None
+            if additional_fields:
+                additional_fields_json = json.dumps(additional_fields)
+                additional_fields_encrypted = cipher.encrypt(additional_fields_json.encode())
+
             new_entry = Passwords(
                 site=form['site'],
                 username=form['username'],
                 password=cipher.encrypt(form['password'].encode()),
+                additional_fields=additional_fields_encrypted,
                 user_id=current_user.id
             )
             db.session.add(new_entry)
@@ -163,6 +195,96 @@ def delete_entry(entry_id):
     db.session.delete(entry_to_delete)
     db.session.commit()
     return redirect(url_for('home'))
+
+
+@app.route("/edit-password/<int:entry_id>", methods=["GET", "POST"])
+@login_required
+def edit_password(entry_id):
+    # Get the password entry
+    entry = db.get_or_404(Passwords, entry_id)
+
+    # Security check: ensure user owns this password
+    if entry.user_id != current_user.id:
+        flash('Unauthorized access.', 'error')
+        return redirect(url_for('home'))
+
+    if request.method == "POST":
+        form = request.form
+        action = form.get("action")
+
+        # Handle initial verification
+        if action == "verify":
+            account_password = form.get('account_password')
+            if not account_password or not check_password_hash(current_user.password, account_password):
+                flash('Incorrect account password. Please try again.', 'error')
+                return render_template('edit.html', entry=entry, show_verification=True)
+            # Verification successful - show edit form
+            decrypted_password = cipher.decrypt(entry.password).decode()
+
+            # Decrypt additional fields
+            additional_fields = []
+            if entry.additional_fields:
+                decrypted_fields = cipher.decrypt(entry.additional_fields).decode()
+                additional_fields = json.loads(decrypted_fields)
+
+            return render_template('edit.html',
+                                   entry=entry,
+                                   current_password=decrypted_password,
+                                   additional_fields=additional_fields,
+                                   verified=True)
+
+        # Handle password generation (only if already verified)
+        elif action == "generate":
+            password = pass_generator()
+            decrypted_password = cipher.decrypt(entry.password).decode()
+
+            # Decrypt additional fields
+            additional_fields = []
+            if entry.additional_fields:
+                decrypted_fields = cipher.decrypt(entry.additional_fields).decode()
+                additional_fields = json.loads(decrypted_fields)
+
+            return render_template('edit.html',
+                                   entry=entry,
+                                   current_password=decrypted_password,
+                                   additional_fields=additional_fields,
+                                   generated_password=password,
+                                   verified=True,
+                                   form_data=form)
+
+        # Handle save (only if already verified)
+        elif action == "save":
+            # Update the entry
+            entry.site = form['site']
+            entry.username = form['username']
+            entry.password = cipher.encrypt(form['password'].encode())
+
+            # Build additional fields list from form data
+            additional_fields = []
+            field_index = 0
+            while f'field_label_{field_index}' in form:
+                label = form.get(f'field_label_{field_index}')
+                value = form.get(f'field_value_{field_index}')
+                if label and value:  # Only add if both label and value exist
+                    additional_fields.append({
+                        'label': label,
+                        'value': value
+                    })
+                field_index += 1
+
+            # Encrypt additional fields as JSON if any exist
+            if additional_fields:
+                additional_fields_json = json.dumps(additional_fields)
+                entry.additional_fields = cipher.encrypt(additional_fields_json.encode())
+            else:
+                entry.additional_fields = None
+
+            db.session.commit()
+            flash('Password updated successfully!', 'success')
+            return redirect(url_for('home'))
+
+    # GET request - show verification form first
+    return render_template('edit.html', entry=entry, show_verification=True)
 
 
 @app.route("/logout")

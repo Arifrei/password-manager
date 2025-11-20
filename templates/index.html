@@ -1,11 +1,10 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<h2>{{ current_user.name.split()[0].title() }}'s Passwords</h2>
+<h1>Password Manager</h1>
 
-{% if data %}
-<div style="text-align: center; margin-bottom: 1.5rem;">
-  <a href="{{ url_for('add_password') }}" class="btn btn-primary btn-lg">➕ Add New Password</a>
+<div class="button-container">
+  <a href="{{ url_for('add_password') }}" class="btn btn-primary">➕ Add New Password</a>
 </div>
 
 <div class="table-container">
@@ -15,14 +14,25 @@
         <th>Site</th>
         <th>Username</th>
         <th>Password</th>
+        <th>Additional Fields</th>
         <th>Action</th>
       </tr>
     </thead>
     <tbody>
-      {% for entry, password in data %}
+      {% for entry, password, additional_fields in data %}
       <tr>
         <td><strong>{{ entry.site }}</strong></td>
-        <td>{{ entry.username }}</td>
+        <td>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="flex: 1;">{{ entry.username }}</span>
+            <button type="button" class="btn-icon-inline copy-btn" data-copy="{{ entry.username }}" data-type="username" title="Copy username">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+            </button>
+          </div>
+        </td>
         <td>
           <div class="password-input-wrapper">
             <input type="password" class="form-control password-field" value="{{ password }}" readonly>
@@ -36,7 +46,7 @@
                 <line x1="1" y1="1" x2="23" y2="23"></line>
               </svg>
             </button>
-            <button type="button" class="btn-icon-inline copy-btn" data-password="{{ password }}" title="Copy password">
+            <button type="button" class="btn-icon-inline copy-btn" data-copy="{{ password }}" data-type="password" title="Copy password">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -45,7 +55,42 @@
           </div>
         </td>
         <td>
-          <a href="#" class="delete-btn" data-entry-id="{{ entry.id }}" data-site="{{ entry.site }}">🗑️ Delete</a>
+          {% if additional_fields %}
+            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+              {% for field in additional_fields %}
+                <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.6rem; background: #f3f4f6; border-radius: 6px;">
+                  <span style="font-weight: 500; color: #667eea; font-size: 0.85rem; min-width: 80px;">{{ field.label }}:</span>
+                  <span style="flex: 1; font-size: 0.9rem; font-family: monospace;">{{ field.value }}</span>
+                  <button type="button" class="btn-icon-inline copy-btn" data-copy="{{ field.value }}" data-type="field" data-field-name="{{ field.label }}" title="Copy {{ field.label }}">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                  </button>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <span style="color: #9ca3af; font-size: 0.9rem; font-style: italic;">None</span>
+          {% endif %}
+        </td>
+        <td>
+          <div style="display: flex; gap: 0.5rem; justify-content: center; align-items: center;">
+            <a href="{{ url_for('edit_password', entry_id=entry.id) }}" class="btn btn-sm btn-outline-secondary" title="Edit password" style="display: inline-flex; align-items: center; gap: 0.25rem;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+              Edit
+            </a>
+            <a href="#" class="delete-btn" data-entry-id="{{ entry.id }}" data-site="{{ entry.site }}" style="color: var(--danger-color); text-decoration: none; font-weight: 600; padding: 0.4rem 0.8rem; border-radius: 8px; transition: all 0.3s ease; display: inline-flex; align-items: center; gap: 0.25rem;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+              Delete
+            </a>
+          </div>
         </td>
       </tr>
       {% endfor %}
@@ -66,12 +111,11 @@
 </div>
 
 <!-- Toast Notification -->
-<div id="toast" class="toast">
-  ✓ Copied to clipboard!
-</div>
+<div id="toast" class="toast"></div>
 
 <script>
   document.addEventListener('DOMContentLoaded', function () {
+    // Toggle password visibility
     const toggleButtons = document.querySelectorAll('.toggle-btn');
 
     toggleButtons.forEach(function (btn) {
@@ -92,17 +136,29 @@
       });
     });
 
-    // Copy to clipboard functionality
+    // Copy to clipboard functionality with custom messages
     const copyButtons = document.querySelectorAll('.copy-btn');
     const toast = document.getElementById('toast');
 
     copyButtons.forEach(function(btn) {
       btn.addEventListener('click', function() {
-        const password = this.getAttribute('data-password');
+        const textToCopy = this.getAttribute('data-copy');
+        const copyType = this.getAttribute('data-type');
+        const fieldName = this.getAttribute('data-field-name');
 
         // Copy to clipboard
-        navigator.clipboard.writeText(password).then(function() {
-          // Show toast notification
+        navigator.clipboard.writeText(textToCopy).then(function() {
+          // Set custom toast message based on type
+          let message = '✓ Copied to clipboard!';
+          if (copyType === 'username') {
+            message = '✓ Username copied!';
+          } else if (copyType === 'password') {
+            message = '✓ Password copied!';
+          } else if (copyType === 'field' && fieldName) {
+            message = `✓ ${fieldName} copied!`;
+          }
+
+          toast.textContent = message;
           toast.classList.add('show');
 
           // Hide toast after 2 seconds
@@ -111,48 +167,51 @@
           }, 2000);
         }).catch(function(err) {
           console.error('Failed to copy:', err);
+          toast.textContent = '✗ Failed to copy';
+          toast.classList.add('show');
+          setTimeout(function() {
+            toast.classList.remove('show');
+          }, 2000);
         });
       });
     });
 
-    // Delete confirmation modal
+    // Delete functionality
+    const deleteButtons = document.querySelectorAll('.delete-btn');
     const modal = document.getElementById('deleteModal');
+    const confirmDeleteBtn = document.getElementById('confirmDelete');
+    const cancelDeleteBtn = document.getElementById('cancelDelete');
     const deleteMessage = document.getElementById('deleteMessage');
-    const confirmBtn = document.getElementById('confirmDelete');
-    const cancelBtn = document.getElementById('cancelDelete');
-    let deleteUrl = '';
+    let entryToDelete = null;
 
-    document.querySelectorAll('.delete-btn').forEach(function(btn) {
+    deleteButtons.forEach(function(btn) {
       btn.addEventListener('click', function(e) {
         e.preventDefault();
-        const entryId = this.getAttribute('data-entry-id');
-        const site = this.getAttribute('data-site');
-        deleteUrl = "{{ url_for('delete_entry', entry_id=0) }}".replace('0', entryId);
-        deleteMessage.textContent = `Are you sure you want to delete the password for ${site}? This action cannot be undone.`;
+        entryToDelete = this.getAttribute('data-entry-id');
+        const siteName = this.getAttribute('data-site');
+        deleteMessage.textContent = `Are you sure you want to delete the password for ${siteName}?`;
         modal.style.display = 'flex';
       });
     });
 
-    confirmBtn.addEventListener('click', function() {
-      window.location.href = deleteUrl;
+    confirmDeleteBtn.addEventListener('click', function() {
+      if (entryToDelete) {
+        window.location.href = `/delete/${entryToDelete}`;
+      }
     });
 
-    cancelBtn.addEventListener('click', function() {
+    cancelDeleteBtn.addEventListener('click', function() {
       modal.style.display = 'none';
+      entryToDelete = null;
     });
 
-    // Close modal when clicking outside
     window.addEventListener('click', function(e) {
       if (e.target === modal) {
         modal.style.display = 'none';
+        entryToDelete = null;
       }
     });
   });
 </script>
-{% else %}
-<div class="empty-state">
-  <p>No passwords saved yet.</p>
-  <a href="{{ url_for('add_password') }}" class="btn btn-primary">Add Your First Password</a>
-</div>
-{% endif %}
+
 {% endblock %}

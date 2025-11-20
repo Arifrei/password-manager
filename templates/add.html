@@ -27,6 +27,23 @@
         </div>
         <div class="invalid-feedback">Please enter the password.</div>
       </div>
+
+      <!-- Additional Fields Section -->
+      <div class="mb-3">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <label class="form-label" style="margin: 0;">Additional Fields (Optional)</label>
+          <button type="button" id="addFieldBtn" class="btn btn-sm btn-outline-primary">
+            ➕ Add Field
+          </button>
+        </div>
+        <p style="color: #6b7280; font-size: 0.9rem; margin-bottom: 1rem;">
+          Add 2FA codes, security questions, recovery codes, or any other important information.
+        </p>
+        <div id="additionalFieldsContainer">
+          <!-- Dynamic fields will be added here -->
+        </div>
+      </div>
+
       <button type="submit" name="action" value="save" class="btn btn-primary">💾 Save Password</button>
     </form>
   </div>
@@ -35,6 +52,8 @@
 <script>
 (() => {
   'use strict';
+
+  // Form validation
   const forms = document.querySelectorAll('.needs-validation');
   Array.from(forms).forEach(form => {
     form.addEventListener('submit', event => {
@@ -50,6 +69,65 @@
       form.classList.add('was-validated');
     }, false);
   });
+
+  // Dynamic additional fields
+  let fieldCounter = 0;
+  const container = document.getElementById('additionalFieldsContainer');
+  const addFieldBtn = document.getElementById('addFieldBtn');
+
+  function createFieldRow(index, label = '', value = '') {
+    const fieldRow = document.createElement('div');
+    fieldRow.className = 'additional-field-row';
+    fieldRow.style.cssText = 'display: flex; gap: 0.5rem; margin-bottom: 0.75rem; align-items: flex-start;';
+    fieldRow.innerHTML = `
+      <input type="text"
+             class="form-control"
+             name="field_label_${index}"
+             placeholder="Label (e.g., 2FA Code, Security Q1)"
+             value="${label}"
+             style="flex: 1;">
+      <input type="text"
+             class="form-control"
+             name="field_value_${index}"
+             placeholder="Value"
+             value="${value}"
+             style="flex: 2;">
+      <button type="button"
+              class="btn btn-sm btn-outline-danger remove-field-btn"
+              title="Remove field"
+              style="padding: 0.4rem 0.75rem;">
+        🗑️
+      </button>
+    `;
+
+    // Add remove functionality
+    fieldRow.querySelector('.remove-field-btn').addEventListener('click', function() {
+      fieldRow.remove();
+    });
+
+    return fieldRow;
+  }
+
+  addFieldBtn.addEventListener('click', function() {
+    const fieldRow = createFieldRow(fieldCounter);
+    container.appendChild(fieldRow);
+    fieldCounter++;
+  });
+
+  // Pre-populate fields if form data exists (after generate button)
+  {% if form_data %}
+    let existingIndex = 0;
+    while (document.querySelector('input[name="field_label_' + existingIndex + '"]')) {
+      const label = '{{ form_data.get("field_label_" + existingIndex|string, "") }}';
+      const value = '{{ form_data.get("field_value_" + existingIndex|string, "") }}';
+      if (label || value) {
+        const fieldRow = createFieldRow(existingIndex, label, value);
+        container.appendChild(fieldRow);
+      }
+      existingIndex++;
+      fieldCounter = existingIndex;
+    }
+  {% endif %}
 })();
 </script>
 

@@ -2,28 +2,48 @@ from flask import Flask, render_template, flash, request, redirect, url_for
 from random import choice, randint, shuffle
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import Integer, String, ForeignKey, LargeBinary
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import Integer, String, ForeignKey
 from flask_login import UserMixin, login_user, LoginManager, login_required, current_user, logout_user
-from cryptography.fernet import Fernet
+from flask_wtf.csrf import CSRFProtect, generate_csrf
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from cryptography.fernet import Fernet, InvalidToken
 from dotenv import load_dotenv
+from cryptography.fernet import InvalidToken
 import json
+from json import JSONDecodeError
 import os
+import sys
+
+if 'app' in globals():
+    print("ERROR: main.py is being loaded twice! Exiting to prevent mapper conflicts.")
+    sys.exit(1)
 
 load_dotenv()
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.getenv("FLASK_KEY")
 
+# CSRF Protection
+csrf = CSRFProtect(app)
+
+# Make csrf_token() available in templates and generate a token per request
+@app.context_processor
+def inject_csrf_token():
+    return dict(csrf_token=generate_csrf)
+
+# Rate Limiting
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://"
+)
+
 key = os.getenv("ENCRYPTION_KEY").encode()
 cipher = Fernet(key)
 
-
-class Base(DeclarativeBase):
-    pass
-
-
-# Fix database URL for Neon/PostgreSQL compatibility
 database_url = os.getenv('DATABASE_URL')
 if database_url and database_url.strip():
     database_url = database_url.strip()
@@ -37,17 +57,13 @@ else:
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-db = SQLAlchemy(model_class=Base)
+# Use Flask-SQLAlchemy's default base
+db = SQLAlchemy()
 db.init_app(app)
 
 login_manager = LoginManager()
 login_manager.login_view = 'login'
 login_manager.init_app(app)
-
-
-@login_manager.user_loader
-def load_user(user_id):
-    return db.session.get(Users, user_id)
 
 
 class Users(db.Model, UserMixin):
@@ -69,14 +85,87 @@ class Passwords(db.Model):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     site: Mapped[str] = mapped_column(String, nullable=False)
+    # Store encrypted values as TEXT (Fernet tokens as strings)
     username: Mapped[str] = mapped_column(String, nullable=False)
-    password: Mapped[str] = mapped_column(LargeBinary, nullable=False)
-    additional_fields: Mapped[str] = mapped_column(LargeBinary, nullable=True)  # Encrypted JSON for custom fields
+    password: Mapped[str] = mapped_column(String, nullable=False)
+    # Encrypted JSON for custom fields, stored as string token
+    additional_fields: Mapped[str] = mapped_column(String, nullable=True)
     user: Mapped["Users"] = relationship(back_populates="passwords")
 
 
-with app.app_context():
-    db.create_all()
+def _normalize_to_bytes(token) -> bytes | None:
+    """Convert DB value (str/bytes/memoryview/None) to bytes or None."""
+    if token is None:
+        return None
+
+    # If it's already bytes or memoryview, just normalize to bytes
+    if isinstance(token, bytes):
+        return token
+    if isinstance(token, memoryview):
+        return bytes(token)
+
+    # If it's a hex-style string from BYTEA (e.g. "\\x6741...")
+    if isinstance(token, str) and token.startswith("\\x") and len(token) > 2:
+        try:
+            return bytes.fromhex(token[2:])
+        except ValueError:
+            # Fall back to encoding as plain text
+            return token.encode()
+
+    # Anything else -> stringify and encode
+    return str(token).encode()
+
+
+def decrypt_or_plain(token) -> str:
+    """
+    Try to decrypt a Fernet token stored as TEXT/BYTEA/memoryview.
+    Handles:
+      - proper Fernet strings
+      - raw Fernet bytes
+      - Postgres BYTEA hex like "\\x6741..."
+    On failure, returns a best-effort plaintext string.
+    """
+    token_bytes = _normalize_to_bytes(token)
+    if token_bytes is None:
+        return ""
+
+    try:
+        # Happy path: it's a valid Fernet token
+        return cipher.decrypt(token_bytes).decode()
+    except InvalidToken:
+        # Not a valid token → fall back to something human-readable
+        if isinstance(token, str) and token.startswith("\\x") and len(token) > 2:
+            try:
+                return bytes.fromhex(token[2:]).decode(errors="ignore")
+            except ValueError:
+                pass
+        # Last resort: decode bytes or stringify
+        try:
+            return token_bytes.decode(errors="ignore")
+        except Exception:
+            return str(token)
+
+
+def decrypt_json_or_empty(token) -> list:
+    """
+    Decrypt JSON stored as a Fernet token.
+    Handles TEXT/BYTEA/memoryview and BYTEA-hex strings.
+    On failure (old/plain or bad JSON), returns [].
+    """
+    token_bytes = _normalize_to_bytes(token)
+    if token_bytes is None:
+        return []
+
+    try:
+        decrypted = cipher.decrypt(token_bytes).decode()
+        return json.loads(decrypted)
+    except (InvalidToken, JSONDecodeError, ValueError):
+        return []
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return db.session.get(Users, user_id)
 
 
 @app.route("/")
@@ -85,18 +174,24 @@ def welcome():
 
 
 @app.route("/register", methods=["GET", "POST"])
+@limiter.limit("5 per hour")  # Prevent registration spam
 def register():
-    if request.form:
+    if request.method == "POST":
         form = request.form
-        user = db.session.execute(db.select(Users).where(Users.email == form['email'])).scalar()
+        # Convert email to lowercase to prevent duplicates
+        email_lowercase = form['email'].lower().strip()
+
+        user = db.session.execute(
+            db.select(Users).where(Users.email == email_lowercase)
+        ).scalar()
         if user:
             flash('The email you entered is already registered. Try logging in instead')
             return redirect(url_for('login'))
         else:
-            password = generate_password_hash(form['password'], 'pbkdf2:sha256', 6)
+            password = generate_password_hash(form['password'])
             new_user = Users(
                 name=form['name'],
-                email=form['email'],
+                email=email_lowercase,
                 password=password
             )
             db.session.add(new_user)
@@ -107,10 +202,16 @@ def register():
 
 
 @app.route("/login", methods=["GET", "POST"])
+@limiter.limit("10 per minute")  # Prevent brute force attacks
 def login():
-    if request.form:
+    if request.method == "POST":
         form = request.form
-        user = db.session.execute(db.select(Users).where(Users.email == form['email'])).scalar()
+        # Convert email to lowercase for consistent login
+        email_lowercase = form['email'].lower().strip()
+
+        user = db.session.execute(
+            db.select(Users).where(Users.email == email_lowercase)
+        ).scalar()
         if not user:
             flash('The email you entered is not registered', 'error')
         elif not check_password_hash(user.password, form['password']):
@@ -121,22 +222,23 @@ def login():
     return render_template('login.html')
 
 
+# ---------------------- Passwords -------------------------
+
 @app.route("/home")
 @login_required
 def home():
-    info = db.session.execute(db.select(Passwords).where(Passwords.user_id == current_user.id)).scalars().all()
-    password_list = [cipher.decrypt(p.password).decode() for p in info]
+    info = db.session.execute(
+        db.select(Passwords).where(Passwords.user_id == current_user.id)
+    ).scalars().all()
+
+    # Decrypt usernames/passwords (or show plaintext if old rows)
+    username_list = [decrypt_or_plain(p.username) for p in info]
+    password_list = [decrypt_or_plain(p.password) for p in info]
 
     # Decrypt additional fields if they exist
-    additional_fields_list = []
-    for p in info:
-        if p.additional_fields:
-            decrypted = cipher.decrypt(p.additional_fields).decode()
-            additional_fields_list.append(json.loads(decrypted))
-        else:
-            additional_fields_list.append([])
+    additional_fields_list = [decrypt_json_or_empty(p.additional_fields) for p in info]
 
-    data = list(zip(info, password_list, additional_fields_list))
+    data = list(zip(info, username_list, password_list, additional_fields_list))
     return render_template('index.html', data=data)
 
 
@@ -152,7 +254,8 @@ def add_password():
             return render_template('add.html', password=password, form_data=form)
         elif action == "save":
             entries = db.session.execute(
-                db.select(Passwords).where(Passwords.user_id == current_user.id)).scalars().all()
+                db.select(Passwords).where(Passwords.user_id == current_user.id)
+            ).scalars().all()
             if any(entry.site == form['site'] for entry in entries):
                 flash('The site/app you entered is already registered.')
 
@@ -162,24 +265,26 @@ def add_password():
             while f'field_label_{field_index}' in form:
                 label = form.get(f'field_label_{field_index}')
                 value = form.get(f'field_value_{field_index}')
-                if label and value:  # Only add if both label and value exist
+                if label and value:
                     additional_fields.append({
                         'label': label,
                         'value': value
                     })
                 field_index += 1
 
-            # Encrypt additional fields as JSON if any exist
-            additional_fields_encrypted = None
+            # Encrypt additional fields JSON as string token
+            additional_fields_token = None
             if additional_fields:
                 additional_fields_json = json.dumps(additional_fields)
-                additional_fields_encrypted = cipher.encrypt(additional_fields_json.encode())
+                additional_fields_token = cipher.encrypt(
+                    additional_fields_json.encode()
+                ).decode()
 
             new_entry = Passwords(
                 site=form['site'],
-                username=form['username'],
-                password=cipher.encrypt(form['password'].encode()),
-                additional_fields=additional_fields_encrypted,
+                username=cipher.encrypt(form['username'].encode()).decode(),
+                password=cipher.encrypt(form['password'].encode()).decode(),
+                additional_fields=additional_fields_token,
                 user_id=current_user.id
             )
             db.session.add(new_entry)
@@ -218,46 +323,45 @@ def edit_password(entry_id):
             if not account_password or not check_password_hash(current_user.password, account_password):
                 flash('Incorrect account password. Please try again.', 'error')
                 return render_template('edit.html', entry=entry, show_verification=True)
+
             # Verification successful - show edit form
-            decrypted_password = cipher.decrypt(entry.password).decode()
+            decrypted_username = decrypt_or_plain(entry.username)
+            decrypted_password = decrypt_or_plain(entry.password)
+            additional_fields = decrypt_json_or_empty(entry.additional_fields)
 
-            # Decrypt additional fields
-            additional_fields = []
-            if entry.additional_fields:
-                decrypted_fields = cipher.decrypt(entry.additional_fields).decode()
-                additional_fields = json.loads(decrypted_fields)
-
-            return render_template('edit.html',
-                                   entry=entry,
-                                   current_password=decrypted_password,
-                                   additional_fields=additional_fields,
-                                   verified=True)
+            return render_template(
+                'edit.html',
+                entry=entry,
+                current_username=decrypted_username,
+                current_password=decrypted_password,
+                additional_fields=additional_fields,
+                verified=True
+            )
 
         # Handle password generation (only if already verified)
         elif action == "generate":
             password = pass_generator()
-            decrypted_password = cipher.decrypt(entry.password).decode()
+            decrypted_username = decrypt_or_plain(entry.username)
+            decrypted_password = decrypt_or_plain(entry.password)
+            additional_fields = decrypt_json_or_empty(entry.additional_fields)
 
-            # Decrypt additional fields
-            additional_fields = []
-            if entry.additional_fields:
-                decrypted_fields = cipher.decrypt(entry.additional_fields).decode()
-                additional_fields = json.loads(decrypted_fields)
-
-            return render_template('edit.html',
-                                   entry=entry,
-                                   current_password=decrypted_password,
-                                   additional_fields=additional_fields,
-                                   generated_password=password,
-                                   verified=True,
-                                   form_data=form)
+            return render_template(
+                'edit.html',
+                entry=entry,
+                current_username=decrypted_username,
+                current_password=decrypted_password,
+                additional_fields=additional_fields,
+                generated_password=password,
+                verified=True,
+                form_data=form
+            )
 
         # Handle save (only if already verified)
         elif action == "save":
             # Update the entry
             entry.site = form['site']
-            entry.username = form['username']
-            entry.password = cipher.encrypt(form['password'].encode())
+            entry.username = cipher.encrypt(form['username'].encode()).decode()
+            entry.password = cipher.encrypt(form['password'].encode()).decode()
 
             # Build additional fields list from form data
             additional_fields = []
@@ -265,17 +369,19 @@ def edit_password(entry_id):
             while f'field_label_{field_index}' in form:
                 label = form.get(f'field_label_{field_index}')
                 value = form.get(f'field_value_{field_index}')
-                if label and value:  # Only add if both label and value exist
+                if label and value:
                     additional_fields.append({
                         'label': label,
                         'value': value
                     })
                 field_index += 1
 
-            # Encrypt additional fields as JSON if any exist
+            # Encrypt additional fields JSON as string token
             if additional_fields:
                 additional_fields_json = json.dumps(additional_fields)
-                entry.additional_fields = cipher.encrypt(additional_fields_json.encode())
+                entry.additional_fields = cipher.encrypt(
+                    additional_fields_json.encode()
+                ).decode()
             else:
                 entry.additional_fields = None
 
@@ -287,6 +393,8 @@ def edit_password(entry_id):
     return render_template('edit.html', entry=entry, show_verification=True)
 
 
+# ---------------------- Other routes ----------------------
+
 @app.route("/logout")
 def logout():
     logout_user()
@@ -296,14 +404,12 @@ def logout():
 @app.route("/example")
 def example():
     # Hardcoded example data - no real user data exposed
-    # This creates fake password entries for demonstration purposes only
     class ExampleEntry:
         def __init__(self, entry_id, site, username, password_text):
             self.site = site
             self.username = username
             self.id = entry_id
 
-    # Create example entries with fake data
     all_examples = [
         (ExampleEntry(1, "Gmail", "john.doe@gmail.com", "ExamplePass123!"), "ExamplePass123!"),
         (ExampleEntry(2, "Facebook", "johndoe@example.com", "SecureP@ssw0rd"), "SecureP@ssw0rd"),
@@ -311,11 +417,8 @@ def example():
         (ExampleEntry(4, "LinkedIn", "john.doe@example.com", "Pr0f3ssional#2024"), "Pr0f3ssional#2024"),
     ]
 
-    # Get deleted IDs from session
     from flask import session
     deleted_ids = session.get('deleted_examples', [])
-
-    # Filter out deleted entries
     example_data = [entry for entry in all_examples if entry[0].id not in deleted_ids]
 
     return render_template('example.html', data=example_data)
@@ -324,18 +427,14 @@ def example():
 @app.route("/delete-example/<int:entry_id>")
 def delete_example(entry_id):
     from flask import session
-    # Get current deleted list or create new one
     deleted_ids = session.get('deleted_examples', [])
-
-    # Add this ID to the deleted list
     if entry_id not in deleted_ids:
         deleted_ids.append(entry_id)
-
-    # Save back to session
     session['deleted_examples'] = deleted_ids
-
     return redirect(url_for('example'))
 
+
+# ---------------------- Password generator ----------------
 
 letters = list("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 numbers = list("0123456789")
@@ -352,4 +451,10 @@ def pass_generator():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Create tables if they don't exist
+    with app.app_context():
+        db.create_all()
+
+    # Use environment variable for debug mode (default: False for production)
+    debug_mode = os.getenv("FLASK_DEBUG", "False").lower() == "true"
+    app.run(debug=debug_mode)

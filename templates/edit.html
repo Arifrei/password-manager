@@ -23,6 +23,9 @@
     {% endfor %}
 
     <form method="POST">
+      <!-- CSRF token -->
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
       <div class="mb-3">
         <label for="account_password" class="form-label">Your Account Password</label>
         <input type="password" class="form-control" id="account_password" name="account_password"
@@ -51,6 +54,9 @@
     </div>
 
     <form method="POST" class="needs-validation" novalidate>
+      <!-- CSRF token -->
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
       <div class="mb-3">
         <label for="site" class="form-label">Site or App</label>
         <input type="text" class="form-control" id="site" name="site" placeholder="e.g., Gmail, Facebook"
@@ -61,7 +67,7 @@
       <div class="mb-3">
         <label for="username" class="form-label">Username or Email</label>
         <input type="text" class="form-control" id="username" name="username" placeholder="e.g., john@example.com"
-               required value="{{ form_data.username if form_data else entry.username }}">
+               required value="{{ form_data.username if form_data else current_username }}">
         <div class="invalid-feedback">Please enter the username or email.</div>
       </div>
 

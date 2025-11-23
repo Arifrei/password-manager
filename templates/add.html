@@ -6,6 +6,9 @@
 <div class="card">
   <div class="card-body">
     <form method="POST" class="needs-validation" novalidate>
+      <!-- CSRF token -->
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
       <div class="mb-3">
         {% for message in get_flashed_messages() %}
           <p class="flash-message">{{ message }}</p>
@@ -28,7 +31,6 @@
         <div class="invalid-feedback">Please enter the password.</div>
       </div>
 
-      <!-- Additional Fields Section -->
       <div class="mb-3">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
           <label class="form-label" style="margin: 0;">Additional Fields (Optional)</label>
@@ -40,11 +42,13 @@
           Add 2FA codes, security questions, recovery codes, or any other important information.
         </p>
         <div id="additionalFieldsContainer">
-          <!-- Dynamic fields will be added here -->
         </div>
       </div>
 
-      <button type="submit" name="action" value="save" class="btn btn-primary">💾 Save Password</button>
+      <div style="display: flex; gap: 1rem;">
+        <button type="submit" name="action" value="save" class="btn btn-primary">💾 Save Password</button>
+        <a href="{{ url_for('home') }}" class="btn btn-outline-secondary">Cancel</a>
+      </div>
     </form>
   </div>
 </div>

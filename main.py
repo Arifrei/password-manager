@@ -28,10 +28,12 @@ app.config["SECRET_KEY"] = os.getenv("FLASK_KEY")
 # CSRF Protection
 csrf = CSRFProtect(app)
 
+
 # Make csrf_token() available in templates and generate a token per request
 @app.context_processor
 def inject_csrf_token():
     return dict(csrf_token=generate_csrf)
+
 
 # Rate Limiting
 limiter = Limiter(
@@ -170,6 +172,9 @@ def load_user(user_id):
 
 @app.route("/")
 def welcome():
+    # Redirect to home if user is already logged in
+    if current_user.is_authenticated:
+        return redirect(url_for('home'))
     return render_template('welcome.html')
 
 
@@ -299,6 +304,40 @@ def delete_entry(entry_id):
     entry_to_delete = db.get_or_404(Passwords, entry_id)
     db.session.delete(entry_to_delete)
     db.session.commit()
+    return redirect(url_for('home'))
+
+
+@app.route("/bulk-delete", methods=["POST"])
+@login_required
+def bulk_delete():
+    form = request.form
+    entry_ids_json = form.get('entry_ids')
+
+    if not entry_ids_json:
+        flash('No entries selected for deletion.', 'error')
+        return redirect(url_for('home'))
+
+    try:
+        entry_ids = json.loads(entry_ids_json)
+        deleted_count = 0
+
+        for entry_id in entry_ids:
+            entry = db.session.get(Passwords, int(entry_id))
+            if entry and entry.user_id == current_user.id:  # Security check
+                db.session.delete(entry)
+                deleted_count += 1
+
+        db.session.commit()
+
+        if deleted_count > 0:
+            flash(f'Successfully deleted {deleted_count} password{"s" if deleted_count != 1 else ""}.', 'success')
+        else:
+            flash('No passwords were deleted.', 'error')
+
+    except Exception as e:
+        db.session.rollback()
+        flash('An error occurred while deleting passwords.', 'error')
+
     return redirect(url_for('home'))
 
 

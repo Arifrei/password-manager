@@ -2,21 +2,21 @@
 
 {% block content %}
 <!-- Header with title and controls -->
-<div style="display: flex !important; justify-content: space-between !important; align-items: center !important; margin-bottom: 2rem !important; gap: 1rem !important; flex-wrap: wrap !important; width: 100% !important;">
-  <h1 style="margin: 0 !important; flex-shrink: 0 !important;">Password Manager</h1>
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; gap: 1rem; flex-wrap: wrap;">
+  <h1 style="margin: 0;">Password Manager</h1>
 
-  <div style="display: flex !important; gap: 1rem !important; align-items: center !important; justify-content: flex-end !important; flex-wrap: wrap !important; margin-left: auto !important;">
+  <div style="display: flex; gap: 1rem; align-items: center; justify-content: flex-end; flex-wrap: wrap;">
     <!-- Search Bar -->
-    <div style="background: white !important; border-radius: 12px !important; box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important; padding: 0.75rem 1rem !important; width: 350px !important; max-width: 350px !important; min-width: 250px !important; margin: 0 !important;">
-      <div style="display: flex !important; align-items: center !important; gap: 0.75rem !important;">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#667eea" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;">
+    <div style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 0.75rem 1rem; width: 280px; max-width: 280px; min-width: 200px;">
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#667eea" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="11" cy="11" r="8"></circle>
           <path d="m21 21-4.35-4.35"></path>
         </svg>
         <input type="text" id="searchInput" placeholder="Search passwords..."
-               style="flex: 1 !important; border: none !important; outline: none !important; font-size: 0.95rem !important; padding: 0 !important; background: transparent !important; width: 100% !important;">
-        <span id="searchCount" style="color: #6b7280 !important; font-size: 0.85rem !important; white-space: nowrap !important; flex-shrink: 0 !important;"></span>
-        <button id="clearSearch" style="display: none !important; background: none !important; border: none !important; cursor: pointer !important; color: #6b7280 !important; padding: 0.25rem !important; flex-shrink: 0 !important;">
+               style="flex: 1; border: none; outline: none; font-size: 0.95rem; padding: 0; background: transparent;">
+        <span id="searchCount" style="color: #6b7280; font-size: 0.85rem; white-space: nowrap;"></span>
+        <button id="clearSearch" style="display: none; background: none; border: none; cursor: pointer; color: #6b7280; padding: 0.25rem;">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -26,14 +26,32 @@
     </div>
 
     <!-- Add Password Button -->
-    <a href="{{ url_for('add_password') }}" class="btn btn-primary" style="white-space: nowrap !important; flex-shrink: 0 !important; margin: 0 !important;">➕ Add Password</a>
+    <a href="{{ url_for('add_password') }}" class="btn btn-primary" style="white-space: nowrap;">➕ Add Password</a>
   </div>
 </div>
 
 <div class="table-container">
+  <!-- Bulk Actions Bar (hidden by default) -->
+  <div id="bulkActionsBar" style="display: none; background: #667eea; color: white; padding: 1rem; border-radius: 12px 12px 0 0; margin-bottom: -1px;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <span id="selectedCount" style="font-weight: 600;">0 selected</span>
+      <div style="display: flex; gap: 1rem;">
+        <button id="bulkDeleteBtn" class="btn btn-danger" style="background: #f87171; border: none;">
+          🗑️ Delete Selected
+        </button>
+        <button id="deselectAllBtn" style="background: rgba(255,255,255,0.2); border: none; padding: 0.5rem 1rem; border-radius: 8px; color: white; cursor: pointer; font-weight: 500;">
+          Clear Selection
+        </button>
+      </div>
+    </div>
+  </div>
+
   <table class="table">
     <thead>
       <tr>
+        <th style="width: 50px;">
+          <input type="checkbox" id="selectAll" style="cursor: pointer; width: 18px; height: 18px;">
+        </th>
         <th>Site</th>
         <th>Username</th>
         <th>Password</th>
@@ -43,7 +61,10 @@
     </thead>
     <tbody>
       {% for entry, username, password, additional_fields in data %}
-      <tr>
+      <tr data-entry-id="{{ entry.id }}">
+        <td>
+          <input type="checkbox" class="row-checkbox" data-entry-id="{{ entry.id }}" data-site="{{ entry.site }}" style="cursor: pointer; width: 18px; height: 18px;">
+        </td>
         <td><strong>{{ entry.site }}</strong></td>
         <td>
           <div style="display: flex; align-items: center; gap: 0.5rem;">
@@ -278,13 +299,14 @@
         const siteName = this.getAttribute('data-site');
         deleteMessage.textContent = `Are you sure you want to delete the password for ${siteName}?`;
         modal.style.display = 'flex';
-      });
-    });
 
-    confirmDeleteBtn.addEventListener('click', function() {
-      if (entryToDelete) {
-        window.location.href = `/delete/${entryToDelete}`;
-      }
+        // Set up single delete handler
+        confirmDeleteBtn.onclick = function() {
+          if (entryToDelete) {
+            window.location.href = `/delete/${entryToDelete}`;
+          }
+        };
+      });
     });
 
     cancelDeleteBtn.addEventListener('click', function() {
@@ -297,6 +319,104 @@
         modal.style.display = 'none';
         entryToDelete = null;
       }
+    });
+
+    // Bulk Operations
+    const selectAllCheckbox = document.getElementById('selectAll');
+    const rowCheckboxes = document.querySelectorAll('.row-checkbox');
+    const bulkActionsBar = document.getElementById('bulkActionsBar');
+    const selectedCountSpan = document.getElementById('selectedCount');
+    const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+    const deselectAllBtn = document.getElementById('deselectAllBtn');
+
+    function updateBulkActionsBar() {
+      const selectedCheckboxes = document.querySelectorAll('.row-checkbox:checked');
+      const count = selectedCheckboxes.length;
+
+      if (count > 0) {
+        bulkActionsBar.style.display = 'block';
+        selectedCountSpan.textContent = `${count} selected`;
+      } else {
+        bulkActionsBar.style.display = 'none';
+      }
+
+      // Update select all checkbox state
+      if (count === rowCheckboxes.length) {
+        selectAllCheckbox.checked = true;
+        selectAllCheckbox.indeterminate = false;
+      } else if (count > 0) {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = true;
+      } else {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = false;
+      }
+    }
+
+    // Select All checkbox
+    selectAllCheckbox.addEventListener('change', function() {
+      rowCheckboxes.forEach(checkbox => {
+        checkbox.checked = this.checked;
+      });
+      updateBulkActionsBar();
+    });
+
+    // Individual checkboxes
+    rowCheckboxes.forEach(checkbox => {
+      checkbox.addEventListener('change', updateBulkActionsBar);
+    });
+
+    // Deselect All button
+    deselectAllBtn.addEventListener('click', function() {
+      rowCheckboxes.forEach(checkbox => {
+        checkbox.checked = false;
+      });
+      updateBulkActionsBar();
+    });
+
+    // Bulk Delete button
+    bulkDeleteBtn.addEventListener('click', function() {
+      const selectedCheckboxes = document.querySelectorAll('.row-checkbox:checked');
+      const count = selectedCheckboxes.length;
+
+      if (count === 0) return;
+
+      const sites = Array.from(selectedCheckboxes).map(cb => cb.getAttribute('data-site'));
+      const idsToDelete = Array.from(selectedCheckboxes).map(cb => cb.getAttribute('data-entry-id'));
+
+      // Show modal with message
+      if (count === 1) {
+        deleteMessage.textContent = `Are you sure you want to delete the password for ${sites[0]}?`;
+      } else {
+        deleteMessage.textContent = `Are you sure you want to delete ${count} passwords?\n\n${sites.join(', ')}`;
+      }
+
+      modal.style.display = 'flex';
+
+      // Override the confirm button to handle bulk delete
+      confirmDeleteBtn.onclick = function() {
+        // Create form to submit deletions
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{{ url_for("bulk_delete") }}';
+
+        // Add CSRF token
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrf_token';
+        csrfInput.value = '{{ csrf_token() }}';
+        form.appendChild(csrfInput);
+
+        // Add IDs to delete
+        const idsInput = document.createElement('input');
+        idsInput.type = 'hidden';
+        idsInput.name = 'entry_ids';
+        idsInput.value = JSON.stringify(idsToDelete);
+        form.appendChild(idsInput);
+
+        document.body.appendChild(form);
+        form.submit();
+      };
     });
 
     // Search/Filter functionality
@@ -321,8 +441,8 @@
       const searchTerm = this.value.toLowerCase().trim();
 
       tableRows.forEach(function(row) {
-        const site = row.querySelector('td:nth-child(1)').textContent.toLowerCase();
-        const username = row.querySelector('td:nth-child(2)').textContent.toLowerCase();
+        const site = row.querySelector('td:nth-child(2)').textContent.toLowerCase();
+        const username = row.querySelector('td:nth-child(3)').textContent.toLowerCase();
 
         if (site.includes(searchTerm) || username.includes(searchTerm)) {
           row.style.display = '';

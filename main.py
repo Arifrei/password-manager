@@ -11,6 +11,7 @@ from flask_limiter.util import get_remote_address
 from cryptography.fernet import Fernet, InvalidToken
 from dotenv import load_dotenv
 from cryptography.fernet import InvalidToken
+from datetime import datetime
 import json
 from json import JSONDecodeError
 import os
@@ -432,6 +433,102 @@ def edit_password(entry_id):
     return render_template('edit.html', entry=entry, show_verification=True)
 
 
+# ---------------------- Export routes ----------------------
+
+@app.route("/export/csv")
+@login_required
+def export_csv():
+    """Export all passwords to CSV format"""
+    import csv
+    from io import StringIO
+
+    # Get all user's passwords
+    entries = db.session.execute(
+        db.select(Passwords).where(Passwords.user_id == current_user.id)
+    ).scalars().all()
+
+    # Create CSV in memory
+    output = StringIO()
+    writer = csv.writer(output)
+
+    # Write header
+    writer.writerow(['Site', 'Username', 'Password', 'Additional Fields'])
+
+    # Write data
+    for entry in entries:
+        username = decrypt_or_plain(entry.username)
+        password = decrypt_or_plain(entry.password)
+
+        # Decrypt additional fields
+        additional_fields_str = ''
+        if entry.additional_fields:
+            try:
+                decrypted = decrypt_or_plain(entry.additional_fields)
+                fields = json.loads(decrypted)
+                # Format as "Label: Value; Label2: Value2"
+                additional_fields_str = '; '.join([f"{f['label']}: {f['value']}" for f in fields])
+            except:
+                pass
+
+        writer.writerow([entry.site, username, password, additional_fields_str])
+
+    # Prepare response
+    output.seek(0)
+    from flask import make_response
+    response = make_response(output.getvalue())
+    response.headers['Content-Disposition'] = 'attachment; filename=passwords_export.csv'
+    response.headers['Content-Type'] = 'text/csv'
+
+    return response
+
+
+@app.route("/export/json")
+@login_required
+def export_json():
+    """Export all passwords to JSON format"""
+    from flask import jsonify
+
+    # Get all user's passwords
+    entries = db.session.execute(
+        db.select(Passwords).where(Passwords.user_id == current_user.id)
+    ).scalars().all()
+
+    # Build JSON structure
+    export_data = {
+        'exported_at': datetime.now().isoformat(),
+        'total_passwords': len(entries),
+        'passwords': []
+    }
+
+    for entry in entries:
+        username = decrypt_or_plain(entry.username)
+        password = decrypt_or_plain(entry.password)
+
+        # Decrypt additional fields
+        additional_fields = []
+        if entry.additional_fields:
+            try:
+                decrypted = decrypt_or_plain(entry.additional_fields)
+                additional_fields = json.loads(decrypted)
+            except:
+                pass
+
+        export_data['passwords'].append({
+            'site': entry.site,
+            'username': username,
+            'password': password,
+            'additional_fields': additional_fields
+        })
+
+    # Create response
+    from flask import make_response
+    response = make_response(json.dumps(export_data, indent=2))
+    response.headers['Content-Disposition'] = 'attachment; filename=passwords_export.json'
+    response.headers['Content-Type'] = 'application/json'
+
+    return response
+
+
 # ---------------------- Other routes ----------------------
 
 @app.route("/logout")
@@ -496,4 +593,4 @@ if __name__ == "__main__":
 
     # Use environment variable for debug mode (default: False for production)
     debug_mode = os.getenv("FLASK_DEBUG", "False").lower() == "true"
-    app.run(debug=debug_mode)
+    app.run(debug=True)

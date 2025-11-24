@@ -25,6 +25,36 @@
       </div>
     </div>
 
+    <!-- Export Dropdown -->
+    <div style="position: relative;">
+      <button id="exportBtn" class="btn btn-outline-secondary" style="white-space: nowrap; display: flex; align-items: center; gap: 0.5rem;">
+        Export
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+      <div id="exportDropdown" style="display: none; position: absolute; top: 100%; right: 0; margin-top: 0.5rem; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); min-width: 160px; z-index: 1000; overflow: hidden;">
+        <a href="{{ url_for('export_csv') }}" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.875rem 1rem; color: #374151; text-decoration: none; border-bottom: 1px solid #f3f4f6; transition: background 0.2s;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#667eea" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="12" y1="18" x2="12" y2="12"></line>
+            <line x1="9" y1="15" x2="15" y2="15"></line>
+          </svg>
+          <span style="font-weight: 500;">CSV Format</span>
+        </a>
+        <a href="{{ url_for('export_json') }}" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.875rem 1rem; color: #374151; text-decoration: none; transition: background 0.2s;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#667eea" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <path d="M10 12h4"></path>
+            <path d="M10 16h4"></path>
+          </svg>
+          <span style="font-weight: 500;">JSON Format</span>
+        </a>
+      </div>
+    </div>
+
     <!-- Add Password Button -->
     <a href="{{ url_for('add_password') }}" class="btn btn-primary" style="white-space: nowrap;">➕ Add Password</a>
   </div>
@@ -465,6 +495,35 @@
 
     // Initial count
     updateSearchCount();
+
+    // Export dropdown toggle
+    const exportBtn = document.getElementById('exportBtn');
+    const exportDropdown = document.getElementById('exportDropdown');
+
+    if (exportBtn && exportDropdown) {
+      exportBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        exportDropdown.style.display = exportDropdown.style.display === 'none' ? 'block' : 'none';
+      });
+
+      // Close dropdown when clicking outside
+      document.addEventListener('click', function(e) {
+        if (!exportBtn.contains(e.target) && !exportDropdown.contains(e.target)) {
+          exportDropdown.style.display = 'none';
+        }
+      });
+
+      // Hover effects for dropdown items
+      const dropdownLinks = exportDropdown.querySelectorAll('a');
+      dropdownLinks.forEach(link => {
+        link.addEventListener('mouseenter', function() {
+          this.style.background = '#f9fafb';
+        });
+        link.addEventListener('mouseleave', function() {
+          this.style.background = 'white';
+        });
+      });
+    }
   });
 </script>
 

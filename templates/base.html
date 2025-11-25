@@ -34,5 +34,58 @@
   <div class="container">
     {% block content %}{% endblock %}
   </div>
+
+  {% if current_user.is_authenticated %}
+  <!-- Session Timeout Modal -->
+  <div id="timeoutModal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <h3>Session Expired</h3>
+      <p>Your session has expired due to inactivity.</p>
+      <p style="font-size: 0.9rem; color: var(--text-light); margin-top: 0.5rem;">You will be redirected to the login page.</p>
+      <div class="modal-buttons">
+        <button id="timeoutOkBtn" class="btn btn-primary">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Auto-logout after 15 minutes of inactivity
+    let inactivityTimeout;
+    const TIMEOUT_DURATION = 15 * 60 * 1000; // 15 minutes in milliseconds
+
+    function resetInactivityTimer() {
+      // Clear existing timeout
+      clearTimeout(inactivityTimeout);
+
+      // Set new timeout
+      inactivityTimeout = setTimeout(function() {
+        // Show custom modal
+        const modal = document.getElementById('timeoutModal');
+        modal.style.display = 'flex';
+
+        // Redirect when OK is clicked
+        document.getElementById('timeoutOkBtn').addEventListener('click', function() {
+          window.location.href = "{{ url_for('logout') }}";
+        });
+
+        // Auto-redirect after 5 seconds even if they don't click
+        setTimeout(function() {
+          window.location.href = "{{ url_for('logout') }}";
+        }, 5000);
+      }, TIMEOUT_DURATION);
+    }
+
+    // Events that indicate user activity
+    const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+
+    // Reset timer on any activity
+    activityEvents.forEach(function(eventName) {
+      document.addEventListener(eventName, resetInactivityTimer, true);
+    });
+
+    // Start the timer when page loads
+    resetInactivityTimer();
+  </script>
+  {% endif %}
 </body>
 </html>

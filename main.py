@@ -1,4 +1,4 @@
-from flask import Flask, render_template, flash, request, redirect, url_for
+from flask import Flask, render_template, flash, request, redirect, url_for, session
 from random import choice, randint, shuffle
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_sqlalchemy import SQLAlchemy
@@ -11,7 +11,7 @@ from flask_limiter.util import get_remote_address
 from cryptography.fernet import Fernet, InvalidToken
 from dotenv import load_dotenv
 from cryptography.fernet import InvalidToken
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 from json import JSONDecodeError
 import os
@@ -59,6 +59,12 @@ else:
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///passwords.db'
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Session timeout configuration (15 minutes of inactivity)
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=15)
+app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # Use Flask-SQLAlchemy's default base
 db = SQLAlchemy()
@@ -171,6 +177,51 @@ def load_user(user_id):
     return db.session.get(Users, user_id)
 
 
+@app.before_request
+def check_session_timeout():
+    """Check session timeout and force logout if expired"""
+    # Skip for static files and public routes
+    if request.endpoint and (request.endpoint == 'static' or
+                             request.endpoint in ['welcome', 'login', 'register', 'example']):
+        return
+
+    if current_user.is_authenticated:
+        # Check if session has 'last_activity' timestamp
+        last_activity = session.get('last_activity')
+
+        if last_activity:
+            # Calculate time since last activity
+            now = datetime.now()
+            last_time = datetime.fromisoformat(last_activity)
+            inactive_duration = now - last_time
+
+            # Get timeout based on remember me status
+            remember_me = session.get('remember_me', False)
+            timeout = timedelta(days=30) if remember_me else timedelta(minutes=15)
+
+            # If inactive too long, logout
+            if inactive_duration > timeout:
+                logout_user()
+                session.clear()
+                flash('Your session has expired due to inactivity. Please login again.', 'error')
+                return redirect(url_for('login'))
+
+        # Update last activity timestamp
+        session['last_activity'] = datetime.now().isoformat()
+        session.modified = True
+
+
+@app.after_request
+def add_cache_headers(response):
+    """Prevent caching of sensitive pages"""
+    # Don't cache authenticated pages
+    if current_user.is_authenticated and request.endpoint not in ['static']:
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '-1'
+    return response
+
+
 @app.route("/")
 def welcome():
     # Redirect to home if user is already logged in
@@ -223,7 +274,25 @@ def login():
         elif not check_password_hash(user.password, form['password']):
             flash('The password you entered does not match', 'error')
         else:
-            login_user(user)
+            # Check if "Remember Me" was checked
+            remember = form.get('remember', False)
+
+            # Login user with remember option
+            login_user(user, remember=remember)
+
+            # Set session as permanent if remember me is checked
+            if remember:
+                session.permanent = True
+                app.permanent_session_lifetime = timedelta(days=30)
+                session['remember_me'] = True
+            else:
+                session.permanent = True  # Still use permanent session for timeout
+                app.permanent_session_lifetime = timedelta(minutes=15)
+                session['remember_me'] = False
+
+            # Set initial last activity timestamp
+            session['last_activity'] = datetime.now().isoformat()
+
             return redirect(url_for('home'))
     return render_template('login.html')
 

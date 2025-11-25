@@ -25,6 +25,16 @@
       </div>
     </div>
 
+    <!-- Import Button -->
+    <a href="{{ url_for('import_passwords') }}" class="btn btn-outline-secondary" style="white-space: nowrap; display: flex; align-items: center; gap: 0.5rem;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline>
+        <line x1="12" y1="15" x2="12" y2="3"></line>
+      </svg>
+      Import
+    </a>
+
     <!-- Export Dropdown -->
     <div style="position: relative;">
       <button id="exportBtn" class="btn btn-outline-secondary" style="white-space: nowrap; display: flex; align-items: center; gap: 0.5rem;">
@@ -90,12 +100,26 @@
       </tr>
     </thead>
     <tbody>
-      {% for entry, username, password, additional_fields in data %}
+      {% for entry, username, password, additional_fields, favicon_url in data %}
       <tr data-entry-id="{{ entry.id }}">
         <td>
           <input type="checkbox" class="row-checkbox" data-entry-id="{{ entry.id }}" data-site="{{ entry.site }}" style="cursor: pointer; width: 18px; height: 18px;">
         </td>
-        <td><strong>{{ entry.site }}</strong></td>
+        <td>
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            {% if favicon_url %}
+              <img src="{{ favicon_url }}" alt="{{ entry.site }}" style="width: 24px; height: 24px; border-radius: 4px; flex-shrink: 0; object-fit: contain;">
+            {% else %}
+              <!-- Default icon if no favicon -->
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#667eea" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="2" y1="12" x2="22" y2="12"></line>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+              </svg>
+            {% endif %}
+            <strong style="flex: 1;">{{ entry.site }}</strong>
+          </div>
+        </td>
         <td>
           <div style="display: flex; align-items: center; gap: 0.5rem;">
             <span style="flex: 1;">{{ username }}</span>
@@ -145,19 +169,10 @@
                   <div style="flex: 1;">
                     <div style="font-weight: 600; color: #667eea; font-size: 0.85rem; margin-bottom: 0.25rem;">{{ field.label }}</div>
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
-                      <input type="password" class="field-value-display" value="{{ field.value }}" readonly style="flex: 1; border: none; background: transparent; font-family: monospace; font-size: 0.9rem; padding: 0.25rem 0;">
-                      <button type="button" class="toggle-field-btn" title="Show/Hide" style="background: none; border: none; cursor: pointer; padding: 0.25rem; color: #6b7280;">
-                        <svg class="icon-show-field" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                          <circle cx="12" cy="12" r="3"></circle>
-                        </svg>
-                        <svg class="icon-hide-field" style="display: none;" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-                          <line x1="1" y1="1" x2="23" y2="23"></line>
-                        </svg>
-                      </button>
-                      <button type="button" class="copy-btn" data-copy="{{ field.value }}" data-type="field" data-field-name="{{ field.label }}" title="Copy {{ field.label }}" style="background: none; border: none; cursor: pointer; padding: 0.25rem; color: #667eea;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <span style="flex: 1; font-size: 0.9rem; color: #374151;">{{ field.value }}</span>
+                      <button type="button" class="copy-btn" data-copy="{{ field.value }}" data-type="field" title="Copy {{ field.label }}"
+                              style="position: relative; background: none; border: none; padding: 0.4rem; cursor: pointer; color: #667eea; border-radius: 4px; transition: all 0.2s;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                           <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                           <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                         </svg>
@@ -168,25 +183,13 @@
               {% endfor %}
             </div>
           {% else %}
-            <span style="color: #9ca3af; font-size: 0.9rem; font-style: italic;">None</span>
+            <span style="color: #9ca3af; font-size: 0.9rem;">—</span>
           {% endif %}
         </td>
         <td>
-          <div style="display: flex; gap: 0.5rem; justify-content: center; align-items: center;">
-            <a href="{{ url_for('edit_password', entry_id=entry.id) }}" class="btn btn-sm btn-outline-secondary" title="Edit password" style="display: inline-flex; align-items: center; gap: 0.25rem;">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-              </svg>
-              Edit
-            </a>
-            <a href="#" class="delete-btn" data-entry-id="{{ entry.id }}" data-site="{{ entry.site }}" style="color: var(--danger-color); text-decoration: none; font-weight: 600; padding: 0.4rem 0.8rem; border-radius: 8px; transition: all 0.3s ease; display: inline-flex; align-items: center; gap: 0.25rem;">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="3 6 5 6 21 6"></polyline>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-              </svg>
-              Delete
-            </a>
+          <div style="display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
+            <a href="{{ url_for('edit_password', entry_id=entry.id) }}" style="color: #667eea; text-decoration: none; font-weight: 500; font-size: 0.95rem; padding: 0.4rem 0.75rem; border-radius: 6px; transition: all 0.2s;">✏️ Edit</a>
+            <a href="#" class="delete-btn" data-entry-id="{{ entry.id }}" data-site="{{ entry.site }}" style="color: #f87171; text-decoration: none; font-weight: 500; font-size: 0.95rem; padding: 0.4rem 0.75rem; border-radius: 6px; transition: all 0.2s;">🗑️ Delete</a>
           </div>
         </td>
       </tr>
@@ -202,17 +205,19 @@
     <p id="deleteMessage">Are you sure you want to delete this password?</p>
     <div class="modal-buttons">
       <button id="cancelDelete" class="btn btn-outline-secondary">Cancel</button>
-      <button id="confirmDelete" class="btn btn-danger">Delete</button>
+      <button id="confirmDeleteBtn" class="btn btn-danger">Delete</button>
     </div>
   </div>
 </div>
 
 <!-- Toast Notification -->
-<div id="toast" class="toast"></div>
+<div id="toast" class="toast">
+  ✓ Copied to clipboard!
+</div>
 
 <script>
   document.addEventListener('DOMContentLoaded', function () {
-    // Toggle password visibility
+    // Password toggle functionality
     const toggleButtons = document.querySelectorAll('.toggle-btn');
 
     toggleButtons.forEach(function (btn) {
@@ -233,70 +238,17 @@
       });
     });
 
-    // Toggle additional fields visibility (show/hide fields container)
-    const viewFieldsButtons = document.querySelectorAll('.view-fields-btn');
-
-    viewFieldsButtons.forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        const entryId = this.getAttribute('data-entry-id');
-        const fieldsContainer = document.getElementById('fields-' + entryId);
-        const buttonText = this.querySelector('span');
-
-        if (fieldsContainer.style.display === 'none') {
-          fieldsContainer.style.display = 'block';
-          buttonText.textContent = 'Hide fields';
-        } else {
-          fieldsContainer.style.display = 'none';
-          const fieldCount = fieldsContainer.querySelectorAll('.field-value-display').length;
-          buttonText.textContent = 'View ' + fieldCount + ' field' + (fieldCount !== 1 ? 's' : '');
-        }
-      });
-    });
-
-    // Toggle individual field value visibility (show/hide like passwords)
-    const toggleFieldButtons = document.querySelectorAll('.toggle-field-btn');
-
-    toggleFieldButtons.forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        const fieldInput = this.closest('div').querySelector('.field-value-display');
-        const iconShow = this.querySelector('.icon-show-field');
-        const iconHide = this.querySelector('.icon-hide-field');
-
-        if (fieldInput.type === 'password') {
-          fieldInput.type = 'text';
-          iconShow.style.display = 'none';
-          iconHide.style.display = 'block';
-        } else {
-          fieldInput.type = 'password';
-          iconShow.style.display = 'block';
-          iconHide.style.display = 'none';
-        }
-      });
-    });
-
-    // Copy to clipboard functionality with custom messages
+    // Copy to clipboard functionality
     const copyButtons = document.querySelectorAll('.copy-btn');
     const toast = document.getElementById('toast');
 
     copyButtons.forEach(function(btn) {
       btn.addEventListener('click', function() {
         const textToCopy = this.getAttribute('data-copy');
-        const copyType = this.getAttribute('data-type');
-        const fieldName = this.getAttribute('data-field-name');
 
         // Copy to clipboard
         navigator.clipboard.writeText(textToCopy).then(function() {
-          // Set custom toast message based on type
-          let message = '✓ Copied to clipboard!';
-          if (copyType === 'username') {
-            message = '✓ Username copied!';
-          } else if (copyType === 'password') {
-            message = '✓ Password copied!';
-          } else if (copyType === 'field' && fieldName) {
-            message = `✓ ${fieldName} copied!`;
-          }
-
-          toast.textContent = message;
+          // Show toast notification
           toast.classList.add('show');
 
           // Hide toast after 2 seconds
@@ -305,53 +257,62 @@
           }, 2000);
         }).catch(function(err) {
           console.error('Failed to copy:', err);
-          toast.textContent = '✗ Failed to copy';
-          toast.classList.add('show');
-          setTimeout(function() {
-            toast.classList.remove('show');
-          }, 2000);
         });
       });
     });
 
-    // Delete functionality
-    const deleteButtons = document.querySelectorAll('.delete-btn');
-    const modal = document.getElementById('deleteModal');
-    const confirmDeleteBtn = document.getElementById('confirmDelete');
-    const cancelDeleteBtn = document.getElementById('cancelDelete');
-    const deleteMessage = document.getElementById('deleteMessage');
-    let entryToDelete = null;
+    // View additional fields toggle
+    const viewFieldsBtns = document.querySelectorAll('.view-fields-btn');
+    viewFieldsBtns.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const entryId = this.getAttribute('data-entry-id');
+        const fieldsContainer = document.getElementById('fields-' + entryId);
 
-    deleteButtons.forEach(function(btn) {
+        if (fieldsContainer.style.display === 'none') {
+          fieldsContainer.style.display = 'block';
+          this.querySelector('span').textContent = 'Hide fields';
+        } else {
+          fieldsContainer.style.display = 'none';
+          const fieldCount = fieldsContainer.querySelectorAll('> div').length;
+          this.querySelector('span').textContent = `View ${fieldCount} field${fieldCount !== 1 ? 's' : ''}`;
+        }
+      });
+    });
+
+    // Delete confirmation modal
+    const modal = document.getElementById('deleteModal');
+    const deleteMessage = document.getElementById('deleteMessage');
+    const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+    const cancelDeleteBtn = document.getElementById('cancelDelete');
+    let deleteUrl = '';
+
+    document.querySelectorAll('.delete-btn').forEach(function(btn) {
       btn.addEventListener('click', function(e) {
         e.preventDefault();
-        entryToDelete = this.getAttribute('data-entry-id');
-        const siteName = this.getAttribute('data-site');
-        deleteMessage.textContent = `Are you sure you want to delete the password for ${siteName}?`;
+        const entryId = this.getAttribute('data-entry-id');
+        const site = this.getAttribute('data-site');
+        deleteUrl = "{{ url_for('delete_entry', entry_id=0) }}".replace('0', entryId);
+        deleteMessage.textContent = `Are you sure you want to delete the password for ${site}?`;
         modal.style.display = 'flex';
-
-        // Set up single delete handler
-        confirmDeleteBtn.onclick = function() {
-          if (entryToDelete) {
-            window.location.href = `/delete/${entryToDelete}`;
-          }
-        };
       });
+    });
+
+    confirmDeleteBtn.addEventListener('click', function() {
+      window.location.href = deleteUrl;
     });
 
     cancelDeleteBtn.addEventListener('click', function() {
       modal.style.display = 'none';
-      entryToDelete = null;
     });
 
+    // Close modal when clicking outside
     window.addEventListener('click', function(e) {
       if (e.target === modal) {
         modal.style.display = 'none';
-        entryToDelete = null;
       }
     });
 
-    // Bulk Operations
+    // Bulk operations
     const selectAllCheckbox = document.getElementById('selectAll');
     const rowCheckboxes = document.querySelectorAll('.row-checkbox');
     const bulkActionsBar = document.getElementById('bulkActionsBar');
@@ -360,26 +321,14 @@
     const deselectAllBtn = document.getElementById('deselectAllBtn');
 
     function updateBulkActionsBar() {
-      const selectedCheckboxes = document.querySelectorAll('.row-checkbox:checked');
-      const count = selectedCheckboxes.length;
+      const checkedCount = document.querySelectorAll('.row-checkbox:checked').length;
 
-      if (count > 0) {
+      if (checkedCount > 0) {
         bulkActionsBar.style.display = 'block';
-        selectedCountSpan.textContent = `${count} selected`;
+        selectedCountSpan.textContent = `${checkedCount} selected`;
       } else {
         bulkActionsBar.style.display = 'none';
-      }
-
-      // Update select all checkbox state
-      if (count === rowCheckboxes.length) {
-        selectAllCheckbox.checked = true;
-        selectAllCheckbox.indeterminate = false;
-      } else if (count > 0) {
         selectAllCheckbox.checked = false;
-        selectAllCheckbox.indeterminate = true;
-      } else {
-        selectAllCheckbox.checked = false;
-        selectAllCheckbox.indeterminate = false;
       }
     }
 

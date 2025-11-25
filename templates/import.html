@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>Import Passwords</h2>
+
+<div class="card">
+  <div class="card-body">
+    <h5 style="margin-bottom: 1.5rem;">Upload CSV File</h5>
+    
+    {% for message in get_flashed_messages() %}
+      <p class="flash-message">{{ message }}</p>
+    {% endfor %}
+
+    <form method="POST" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      
+      <div class="mb-3">
+        <label class="form-label">Select CSV File</label>
+        <input type="file" class="form-control" name="file" accept=".csv" required>
+        <div style="margin-top: 0.5rem; font-size: 0.9rem; color: var(--text-light);">
+          CSV file must have columns: Site, Username, Password, Additional Fields (optional)
+        </div>
+      </div>
+
+      <div style="background: #f9fafb; border-left: 4px solid #667eea; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+        <h6 style="color: #667eea; margin-bottom: 0.5rem;">📋 CSV Format Example:</h6>
+        <pre style="background: white; padding: 0.75rem; border-radius: 6px; font-size: 0.85rem; overflow-x: auto; margin: 0;">Site,Username,Password,Additional Fields
+Gmail,john@example.com,MyPass123,2FA Code: ABC123; Recovery: backup@example.com
+Facebook,johndoe,SecurePass!,
+Twitter,@john,Tw1tt3r#Pass,Security Q1: Pet name - Fluffy</pre>
+      </div>
+
+      <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+        <h6 style="color: #d97706; margin-bottom: 0.5rem;">⚠️ Important Notes:</h6>
+        <ul style="margin: 0; padding-left: 1.5rem; font-size: 0.9rem; color: #92400e;">
+          <li>Duplicate entries (same site + username) will be skipped</li>
+          <li>Rows with missing required fields (Site, Username, or Password) will be skipped</li>
+          <li>Additional Fields format: <code>Label: Value; Label2: Value2</code></li>
+          <li>All passwords will be encrypted before storing</li>
+        </ul>
+      </div>
+
+      <div style="display: flex; gap: 1rem;">
+        <button type="submit" class="btn btn-primary">📥 Import Passwords</button>
+        <a href="{{ url_for('home') }}" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<style>
+  pre {
+    white-space: pre;
+    word-wrap: normal;
+  }
+  
+  code {
+    background: #f3f4f6;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.9em;
+  }
+</style>
+
+{% endblock %}

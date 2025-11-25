@@ -16,6 +16,11 @@ import json
 from json import JSONDecodeError
 import os
 import sys
+import requests
+from urllib.parse import urlparse, urljoin
+from io import BytesIO
+from PIL import Image
+import hashlib
 
 if 'app' in globals():
     print("ERROR: main.py is being loaded twice! Exiting to prevent mapper conflicts.")
@@ -60,6 +65,11 @@ else:
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# Favicon storage configuration
+FAVICON_FOLDER = os.path.join(os.path.dirname(__file__), 'static', 'favicons')
+os.makedirs(FAVICON_FOLDER, exist_ok=True)
+os.makedirs(os.path.join(os.path.dirname(__file__), 'static'), exist_ok=True)
+
 # Session timeout configuration (15 minutes of inactivity)
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=15)
 app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
@@ -99,6 +109,8 @@ class Passwords(db.Model):
     password: Mapped[str] = mapped_column(String, nullable=False)
     # Encrypted JSON for custom fields, stored as string token
     additional_fields: Mapped[str] = mapped_column(String, nullable=True)
+    # Favicon filename (e.g., "google_com.png")
+    favicon: Mapped[str] = mapped_column(String, nullable=True)
     user: Mapped["Users"] = relationship(back_populates="passwords")
 
 
@@ -170,6 +182,118 @@ def decrypt_json_or_empty(token) -> list:
         return json.loads(decrypted)
     except (InvalidToken, JSONDecodeError, ValueError):
         return []
+
+
+# ---------------------- Favicon Fetching Functions ----------------------
+
+def extract_domain_from_site(site_name):
+    """
+    Extract a clean domain from various site name formats.
+    Examples:
+      - "Gmail" -> "gmail.com"
+      - "google.com" -> "google.com"
+      - "https://github.com" -> "github.com"
+      - "Facebook Login" -> "facebook.com"
+    """
+    site_name = site_name.lower().strip()
+
+    # Remove common suffixes
+    site_name = site_name.replace(' login', '').replace(' account', '').replace(' app', '').strip()
+
+    # If it looks like a URL, parse it
+    if '://' in site_name or site_name.startswith('www.'):
+        parsed = urlparse(site_name if '://' in site_name else f'http://{site_name}')
+        domain = parsed.netloc or parsed.path
+        domain = domain.replace('www.', '')
+        return domain
+
+    # If it already looks like a domain
+    if '.' in site_name and ' ' not in site_name:
+        return site_name.replace('www.', '')
+
+    # Otherwise, assume it's a brand name and add .com
+    site_name = site_name.split()[0]  # Take first word
+    return f"{site_name}.com"
+
+
+def get_favicon_filename(site_name):
+    """Generate a consistent filename for a favicon based on site name"""
+    domain = extract_domain_from_site(site_name)
+    # Create a safe filename
+    safe_name = domain.replace('.', '_').replace('/', '_').replace(':', '_')
+    return f"{safe_name}.png"
+
+
+def fetch_and_save_favicon(site_name):
+    domain = extract_domain_from_site(site_name)
+    filename = get_favicon_filename(site_name)
+    filepath = os.path.join(FAVICON_FOLDER, filename)
+
+    # If favicon already exists, return it
+    if os.path.exists(filepath):
+        return filename
+
+    # List of favicon URLs to try
+    favicon_urls = [
+        f"https://www.google.com/s2/favicons?domain={domain}&sz=128",
+        f"https://icons.duckduckgo.com/ip3/{domain}.ico",
+        f"https://{domain}/favicon.ico",
+        f"https://www.{domain}/favicon.ico",
+    ]
+
+    for url in favicon_urls:
+        try:
+            response = requests.get(url, timeout=5, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            })
+
+            if response.status_code == 200 and len(response.content) > 0:
+                # Try to open as image to validate
+                try:
+                    img = Image.open(BytesIO(response.content))
+
+                    # Skip very small images (likely placeholders)
+                    if img.size[0] < 10 or img.size[1] < 10:
+                        continue
+
+                    # Convert to PNG and resize to 32x32
+                    img = img.convert('RGBA')
+                    img = img.resize((32, 32), Image.Resampling.LANCZOS)
+
+                    # Save as PNG
+                    img.save(filepath, 'PNG')
+                    return filename
+
+                except Exception as e:
+                    # Not a valid image, try next URL
+                    continue
+
+        except Exception as e:
+            # Network error or timeout, try next URL
+            continue
+
+    # If all attempts failed, return None (will use default icon)
+    return None
+
+
+def get_favicon_url(site_name, entry=None):
+    """
+    Get the URL for a site's favicon.
+    If entry is provided and has a favicon, return that.
+    Otherwise, try to fetch a new one.
+    Returns the URL path or None for default icon.
+    """
+    # If entry has a favicon stored, use it
+    if entry and entry.favicon and os.path.exists(os.path.join(FAVICON_FOLDER, entry.favicon)):
+        return url_for('static', filename=f'favicons/{entry.favicon}')
+
+    # Try to fetch a new favicon
+    filename = fetch_and_save_favicon(site_name)
+    if filename:
+        return url_for('static', filename=f'favicons/{filename}')
+
+    # Return None to use default icon
+    return None
 
 
 @login_manager.user_loader
@@ -313,7 +437,10 @@ def home():
     # Decrypt additional fields if they exist
     additional_fields_list = [decrypt_json_or_empty(p.additional_fields) for p in info]
 
-    data = list(zip(info, username_list, password_list, additional_fields_list))
+    # Get favicon URLs for each entry
+    favicon_list = [get_favicon_url(p.site, p) for p in info]
+
+    data = list(zip(info, username_list, password_list, additional_fields_list, favicon_list))
     return render_template('index.html', data=data)
 
 
@@ -355,11 +482,15 @@ def add_password():
                     additional_fields_json.encode()
                 ).decode()
 
+            # Fetch favicon for the site
+            favicon_filename = fetch_and_save_favicon(form['site'])
+
             new_entry = Passwords(
                 site=form['site'],
                 username=cipher.encrypt(form['username'].encode()).decode(),
                 password=cipher.encrypt(form['password'].encode()).decode(),
                 additional_fields=additional_fields_token,
+                favicon=favicon_filename,
                 user_id=current_user.id
             )
             db.session.add(new_entry)
@@ -494,6 +625,11 @@ def edit_password(entry_id):
             else:
                 entry.additional_fields = None
 
+            # Update favicon if site name changed
+            if entry.site != form['site']:
+                favicon_filename = fetch_and_save_favicon(form['site'])
+                entry.favicon = favicon_filename
+
             db.session.commit()
             flash('Password updated successfully!', 'success')
             return redirect(url_for('home'))
@@ -598,6 +734,133 @@ def export_json():
     return response
 
 
+@app.route("/import", methods=["GET", "POST"])
+@login_required
+def import_passwords():
+    """Import passwords from CSV file"""
+    if request.method == "POST":
+        # Check if file was uploaded
+        if 'file' not in request.files:
+            flash('No file uploaded.', 'error')
+            return redirect(url_for('import_passwords'))
+
+        file = request.files['file']
+
+        # Check if file has a filename
+        if file.filename == '':
+            flash('No file selected.', 'error')
+            return redirect(url_for('import_passwords'))
+
+        # Check if file is CSV
+        if not file.filename.endswith('.csv'):
+            flash('Please upload a CSV file.', 'error')
+            return redirect(url_for('import_passwords'))
+
+        try:
+            import csv
+            from io import StringIO
+
+            # Read CSV file
+            csv_data = file.read().decode('utf-8')
+            csv_file = StringIO(csv_data)
+            reader = csv.DictReader(csv_file)
+
+            imported_count = 0
+            skipped_count = 0
+            error_count = 0
+
+            for row in reader:
+                try:
+                    # Get required fields
+                    site = row.get('Site', '').strip()
+                    username = row.get('Username', '').strip()
+                    password = row.get('Password', '').strip()
+
+                    # Skip if missing required fields
+                    if not site or not username or not password:
+                        skipped_count += 1
+                        continue
+
+                    # Check for duplicates (same site + username)
+                    existing = db.session.execute(
+                        db.select(Passwords).where(
+                            Passwords.user_id == current_user.id,
+                            Passwords.site == site
+                        )
+                    ).scalar()
+
+                    if existing:
+                        # Try to decrypt and check username
+                        try:
+                            existing_username = decrypt_or_plain(existing.username)
+                            if existing_username == username:
+                                skipped_count += 1
+                                continue
+                        except:
+                            pass
+
+                    # Parse additional fields if present
+                    additional_fields_str = row.get('Additional Fields', '').strip()
+                    additional_fields_encrypted = None
+
+                    if additional_fields_str:
+                        # Parse "Label: Value; Label2: Value2" format
+                        additional_fields = []
+                        pairs = additional_fields_str.split(';')
+                        for pair in pairs:
+                            if ':' in pair:
+                                label, value = pair.split(':', 1)
+                                additional_fields.append({
+                                    'label': label.strip(),
+                                    'value': value.strip()
+                                })
+
+                        if additional_fields:
+                            additional_fields_json = json.dumps(additional_fields)
+                            additional_fields_encrypted = cipher.encrypt(additional_fields_json.encode())
+
+                    # Fetch favicon for imported site
+                    favicon_filename = fetch_and_save_favicon(site)
+
+                    # Create new password entry
+                    new_entry = Passwords(
+                        site=site,
+                        username=cipher.encrypt(username.encode()),
+                        password=cipher.encrypt(password.encode()),
+                        additional_fields=additional_fields_encrypted,
+                        favicon=favicon_filename,
+                        user_id=current_user.id
+                    )
+
+                    db.session.add(new_entry)
+                    imported_count += 1
+
+                except Exception as e:
+                    error_count += 1
+                    continue
+
+            # Commit all imports
+            db.session.commit()
+
+            # Show results
+            message = f'Successfully imported {imported_count} password(s).'
+            if skipped_count > 0:
+                message += f' Skipped {skipped_count} duplicate(s).'
+            if error_count > 0:
+                message += f' {error_count} error(s).'
+
+            flash(message, 'success')
+            return redirect(url_for('home'))
+
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error importing file: {str(e)}', 'error')
+            return redirect(url_for('import_passwords'))
+
+    # GET request - show import form
+    return render_template('import.html')
+
+
 # ---------------------- Other routes ----------------------
 
 @app.route("/logout")
@@ -662,4 +925,4 @@ if __name__ == "__main__":
 
     # Use environment variable for debug mode (default: False for production)
     debug_mode = os.getenv("FLASK_DEBUG", "False").lower() == "true"
-    app.run(debug=True)
+    app.run(debug=debug_mode)

@@ -77,6 +77,22 @@
         <div class="invalid-feedback">Please enter the password.</div>
       </div>
 
+      <div class="mb-3">
+        <label for="categories" class="form-label">Categories (Optional)</label>
+        <input type="text" class="form-control" id="categories" name="categories" placeholder="e.g., Work, Social, Finance" value="{{ form_data.categories if form_data else current_categories }}">
+        <div class="form-text-description mt-2">Enter comma-separated categories.</div>
+        <label for="category-input" class="form-label">Categories</label>
+        <div class="tag-input-wrapper">
+          <div id="tag-container" class="tag-container">
+            <!-- Selected tags will appear here -->
+          </div>
+          <input type="text" id="category-input" class="tag-input" placeholder="Add or search categories...">
+          <div id="suggestion-box" class="suggestion-box"></div>
+        </div>
+        <input type="hidden" id="categories" name="categories" value="{{ form_data.categories if form_data else current_categories }}">
+        <div class="form-text-description mt-2">Start typing to search or create new categories.</div>
+      </div>
+
       <!-- Additional Fields Section -->
       <div class="mb-3">
         <div class="form-row-header">

@@ -7,8 +7,6 @@ from project.utils import favicon_worker
 if __name__ == "__main__":
     # This check prevents the worker from starting in the reloader's child process
     if os.environ.get("WERKZEUG_RUN_MAIN") != "true":
-        # Start the background worker thread only once in the main process
-        # The 'daemon=True' flag ensures the thread will exit when the main app exits.
         worker_thread = threading.Thread(target=favicon_worker, daemon=True)
         worker_thread.start()
         print("Background favicon worker started.")

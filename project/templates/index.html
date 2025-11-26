@@ -23,6 +23,41 @@
         </button>
       </div>
     </div>
+
+    <!-- Category Filter Dropdown -->
+    <div class="dropdown-wrapper">
+      <a href="{{ url_for('passwords.home') }}" class="btn btn-outline-secondary btn-with-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+        {{ current_filter or 'All Categories' }}
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </a>
+      <div class="dropdown-menu" style="min-width: 200px;">
+        <a href="{{ url_for('passwords.home') }}" class="dropdown-item">All Categories</a>
+        {% for category in categories %}
+          <a href="{{ url_for('passwords.home', category=category) }}" class="dropdown-item">{{ category }}</a>
+        {% endfor %}
+      </div>
+      <script>
+        // Simple dropdown toggle for category filter
+        document.querySelector('.dropdown-wrapper .btn').addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'block' ? 'none' : 'block'; });
+      </script>
+    </div>
+
+    <!-- Sort By Dropdown -->
+    <div class="dropdown-wrapper">
+      <a href="#" class="btn btn-outline-secondary btn-with-icon" id="sortBtn">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        Sort by: {{ 'Date Added' if current_sort == 'date_added' else 'Site' }}
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </a>
+      <div class="dropdown-menu" id="sortDropdown" style="min-width: 200px;">
+        <a href="{{ url_for('passwords.home', category=current_filter, sort='site') }}" class="dropdown-item">Site Name</a>
+        <a href="{{ url_for('passwords.home', category=current_filter, sort='date_added') }}" class="dropdown-item">Date Added (Newest)</a>
+      </div>
+      <script>
+        document.getElementById('sortBtn').addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'block' ? 'none' : 'block'; });
+      </script>
+    </div>
   </div>
 
   <div class="controls-right">
@@ -123,6 +158,11 @@
               </svg>
             {% endif %}
             <strong class="site-name">{{ entry.site }}</strong>
+            <div class="category-badges">
+              {% for category in entry.categories %}
+                <span class="category-badge">{{ category.name }}</span>
+              {% endfor %}
+            </div>
           </div>
         </td>
         <td>

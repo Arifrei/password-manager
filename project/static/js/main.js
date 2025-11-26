@@ -201,18 +201,45 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (searchInput) {
       searchInput.addEventListener('input', function() {
-        const searchTerm = this.value.toLowerCase().trim();
+        const searchTerm = this.value.trim();
+        const searchRegex = searchTerm ? new RegExp(`(${searchTerm.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')})`, 'gi') : null;
+
         tableRows.forEach(row => {
-          const site = row.querySelector('td:nth-child(2)').textContent.toLowerCase();
-          const username = row.querySelector('td:nth-child(3)').textContent.toLowerCase();
-          row.style.display = (site.includes(searchTerm) || username.includes(searchTerm)) ? '' : 'none';
+          const siteCell = row.querySelector('.site-name');
+          const usernameCell = row.querySelector('.text-value');
+
+          // Restore original text before each search
+          if (siteCell && siteCell.dataset.original) {
+            siteCell.innerHTML = siteCell.dataset.original;
+          }
+          if (usernameCell && usernameCell.dataset.original) {
+            usernameCell.innerHTML = usernameCell.dataset.original;
+          }
+
+          const siteText = siteCell ? siteCell.textContent : '';
+          const usernameText = usernameCell ? usernameCell.textContent : '';
+
+          const isMatch = searchTerm ? (siteText.toLowerCase().includes(searchTerm.toLowerCase()) || usernameText.toLowerCase().includes(searchTerm.toLowerCase())) : true;
+
+          if (isMatch && searchRegex) {
+            // Store original if not already stored
+            if (siteCell && !siteCell.dataset.original) siteCell.dataset.original = siteCell.innerHTML;
+            if (usernameCell && !usernameCell.dataset.original) usernameCell.dataset.original = usernameCell.innerHTML;
+
+            // Apply highlighting
+            if (siteCell) siteCell.innerHTML = siteText.replace(searchRegex, `<mark class="search-highlight">$1</mark>`);
+            if (usernameCell) usernameCell.innerHTML = usernameText.replace(searchRegex, `<mark class="search-highlight">$1</mark>`);
+          }
+
+          row.style.display = isMatch ? '' : 'none';
         });
         updateSearchCount();
       });
 
       clearSearchBtn.addEventListener('click', function() {
         searchInput.value = '';
-        tableRows.forEach(row => row.style.display = '');
+        // Trigger the input event to clear highlights and show all rows
+        searchInput.dispatchEvent(new Event('input'));
         updateSearchCount();
         searchInput.focus();
       });
@@ -333,3 +360,112 @@ document.querySelectorAll('.generate-password-api-btn').forEach(button => {
     }
   });
 });
+
+// --- Category Tag Input Functionality ---
+const tagInputWrapper = document.querySelector('.tag-input-wrapper');
+if (tagInputWrapper) {
+  const categoryInput = document.getElementById('category-input');
+  const tagContainer = document.getElementById('tag-container');
+  const suggestionBox = document.getElementById('suggestion-box');
+  const hiddenCategoriesInput = document.getElementById('categories');
+
+  let allCategories = [];
+  let selectedCategories = new Set();
+
+  // Fetch all categories from the API
+  fetch('/api/categories')
+    .then(response => response.json())
+    .then(data => {
+      allCategories = data;
+    });
+
+  function updateHiddenInput() {
+    hiddenCategoriesInput.value = Array.from(selectedCategories).join(',');
+  }
+
+  function createTag(label) {
+    if (selectedCategories.has(label) || !label) return;
+
+    const tag = document.createElement('div');
+    tag.className = 'tag-pill';
+    tag.textContent = label;
+
+    const closeBtn = document.createElement('span');
+    closeBtn.className = 'tag-close';
+    closeBtn.innerHTML = '&times;';
+    closeBtn.addEventListener('click', () => {
+      tag.remove();
+      selectedCategories.delete(label);
+      updateHiddenInput();
+    });
+
+    tag.appendChild(closeBtn);
+    tagContainer.appendChild(tag);
+    selectedCategories.add(label);
+    updateHiddenInput();
+  }
+
+  // Populate initial tags from hidden input (for edit page)
+  if (hiddenCategoriesInput.value) {
+    hiddenCategoriesInput.value.split(',').forEach(cat => {
+      if (cat.trim()) createTag(cat.trim());
+    });
+  }
+
+  categoryInput.addEventListener('input', () => {
+    const inputValue = categoryInput.value.toLowerCase();
+    if (!inputValue) {
+      suggestionBox.style.display = 'none';
+      return;
+    }
+
+    const suggestions = allCategories.filter(cat =>
+      cat.toLowerCase().includes(inputValue) && !selectedCategories.has(cat)
+    );
+
+    suggestionBox.innerHTML = '';
+    if (suggestions.length > 0) {
+      suggestions.forEach(suggestion => {
+        const suggestionItem = document.createElement('div');
+        suggestionItem.className = 'suggestion-item';
+        suggestionItem.textContent = suggestion;
+        suggestionItem.addEventListener('click', () => {
+          createTag(suggestion);
+          categoryInput.value = '';
+          suggestionBox.style.display = 'none';
+          categoryInput.focus();
+        });
+        suggestionBox.appendChild(suggestionItem);
+      });
+      suggestionBox.style.display = 'block';
+    } else {
+      suggestionBox.style.display = 'none';
+    }
+  });
+
+  categoryInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      const newTag = categoryInput.value.trim();
+      if (newTag) {
+        createTag(newTag);
+        categoryInput.value = '';
+        suggestionBox.style.display = 'none';
+      }
+    }
+  });
+
+  // Hide suggestions when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!tagInputWrapper.contains(e.target)) {
+      suggestionBox.style.display = 'none';
+    }
+  });
+
+  // Focus input when clicking the wrapper
+  tagInputWrapper.addEventListener('click', (e) => {
+    if (e.target === tagInputWrapper || e.target === tagContainer) {
+      categoryInput.focus();
+    }
+  });
+}

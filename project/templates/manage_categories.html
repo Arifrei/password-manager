@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>Manage Categories</h2>
+
+{% for message in get_flashed_messages() %}
+  <p class="flash-message success">{{ message }}</p>
+{% endfor %}
+
+<div class="card" style="max-width: 800px;">
+  <div class="card-body" style="padding: 2rem;">
+    {% if categories %}
+      <ul class="category-management-list">
+        {% for category in categories %}
+          <li class="category-management-item">
+            <div class="category-info">
+              <span class="category-name">{{ category.name }}</span>
+              <span class="category-count">{{ category.password_count }} password{{ 's' if category.password_count != 1 else '' }}</span>
+            </div>
+            <div class="category-actions">
+              <!-- Rename Form -->
+              <form method="POST" action="{{ url_for('account.rename_category', category_id=category.id) }}" class="rename-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="text" name="new_name" class="form-control form-control-sm" value="{{ category.name }}" required>
+                <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary cancel-rename">Cancel</button>
+              </form>
+              
+              <!-- Action Buttons -->
+              <button type="button" class="btn btn-sm btn-outline-secondary start-rename">Rename</button>
+              <form method="POST" action="{{ url_for('account.delete_category', category_id=category.id) }}" onsubmit="return confirm('Are you sure you want to delete the category \'{{ category.name }}\'? This will not delete any passwords.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+              </form>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-center text-muted">You haven't created any categories yet.</p>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.start-rename').forEach(button => {
+  button.addEventListener('click', function() {
+    this.closest('.category-actions').classList.add('editing');
+  });
+});
+
+document.querySelectorAll('.cancel-rename').forEach(button => {
+  button.addEventListener('click', function() {
+    this.closest('.category-actions').classList.remove('editing');
+  });
+});
+</script>
+
+{% endblock %}

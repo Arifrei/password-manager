@@ -7,9 +7,10 @@ from flask import (
 )
 from flask_login import login_required, current_user
 from werkzeug.security import check_password_hash
+from sqlalchemy import desc
 
 from . import db
-from .models import Passwords
+from .models import Passwords, Category
 from .utils import (
     decrypt_or_plain, decrypt_json_or_empty, pass_generator,
     favicon_queue, cipher
@@ -28,17 +29,43 @@ def welcome():
 @passwords_bp.route("/home")
 @login_required
 def home():
-    info = db.session.execute(
-        db.select(Passwords).where(Passwords.user_id == current_user.id)
-    ).scalars().all()
+    category_filter = request.args.get('category')
+    sort_by = request.args.get('sort', 'site')  # Default to sorting by site
+    
+    query = db.select(Passwords).where(Passwords.user_id == current_user.id)
 
+    if category_filter:
+        query = query.join(Passwords.categories).where(Category.name == category_filter)
+
+    # Apply sorting - ensuring we have a default order
+    if sort_by == 'date_added':
+        query = query.order_by(desc(Passwords.date_added))
+    else:
+        query = query.order_by(Passwords.site)
+
+    # Add a secondary sort for consistency
+    if sort_by != 'site':
+        query = query.order_by(Passwords.site)
+
+    info = db.session.execute(query).scalars().unique().all()
     username_list = [decrypt_or_plain(p.username) for p in info]
     password_list = [decrypt_or_plain(p.password) for p in info]
     additional_fields_list = [decrypt_json_or_empty(p.additional_fields) for p in info]
     favicon_list = [url_for('static', filename=f'favicons/{p.favicon}') if p.favicon else None for p in info]
 
+    # Fetch all categories for the filter dropdown
+    all_user_categories = db.session.execute(
+        db.select(Category.name).where(Category.user_id == current_user.id).distinct().order_by(Category.name)
+    ).scalars().all()
+
     data = list(zip(info, username_list, password_list, additional_fields_list, favicon_list))
-    return render_template('index.html', data=data)
+    return render_template(
+        'index.html',
+        data=data,
+        categories=all_user_categories,
+        current_filter=category_filter,
+        current_sort=sort_by
+    )
 
 
 @passwords_bp.route("/add-password", methods=["GET", "POST"])
@@ -74,6 +101,20 @@ def add_password():
                 additional_fields_json = json.dumps(additional_fields)
                 additional_fields_token = cipher.encrypt(additional_fields_json.encode()).decode()
 
+            # Handle categories
+            category_names = [name.strip() for name in form.get('categories', '').split(',') if name.strip()]
+            password_categories = []
+            if category_names:
+                for cat_name in category_names:
+                    category = db.session.execute(db.select(Category).where(
+                        Category.user_id == current_user.id,
+                        Category.name == cat_name
+                    )).scalar_one_or_none()
+                    if not category:
+                        category = Category(name=cat_name, user_id=current_user.id)
+                        db.session.add(category)
+                    password_categories.append(category)
+
             new_entry = Passwords(
                 site=form['site'],
                 username=cipher.encrypt(form['username'].encode()).decode(),
@@ -82,6 +123,7 @@ def add_password():
                 favicon=None,
                 user_id=current_user.id
             )
+            new_entry.categories = password_categories
             db.session.add(new_entry)
             db.session.commit()
             favicon_queue.put((new_entry.id, new_entry.site))
@@ -95,6 +137,14 @@ def add_password():
 def generate_password_api():
     """API endpoint to generate a new password."""
     return jsonify(password=pass_generator())
+
+@passwords_bp.route("/api/categories")
+@login_required
+def get_user_categories():
+    """API endpoint to get all of the user's categories for autocomplete."""
+    categories = db.session.execute(db.select(Category.name).where(Category.user_id == current_user.id)).scalars().all()
+    return jsonify(categories)
+
 
 @passwords_bp.route("/edit-password/<int:entry_id>", methods=["GET", "POST"])
 @login_required
@@ -117,7 +167,8 @@ def edit_password(entry_id):
                 'edit.html', entry=entry, verified=True,
                 current_username=decrypt_or_plain(entry.username),
                 current_password=decrypt_or_plain(entry.password),
-                additional_fields=decrypt_json_or_empty(entry.additional_fields)
+                additional_fields=decrypt_json_or_empty(entry.additional_fields),
+                current_categories=", ".join(c.name for c in entry.categories)
             )
 
         elif action == "save":
@@ -139,9 +190,25 @@ def edit_password(entry_id):
             else:
                 entry.additional_fields = None
 
+            # Handle categories
+            entry.categories.clear() # Clear existing categories
+            category_names = [name.strip() for name in form.get('categories', '').split(',') if name.strip()]
+            if category_names:
+                for cat_name in category_names:
+                    category = db.session.execute(db.select(Category).where(
+                        Category.user_id == current_user.id,
+                        Category.name == cat_name
+                    )).scalar_one_or_none()
+                    if not category:
+                        category = Category(name=cat_name, user_id=current_user.id)
+                        db.session.add(category)
+                    entry.categories.append(category)
+
+
             if original_site != entry.site:
                 entry.favicon = None
                 favicon_queue.put((entry.id, entry.site))
+            entry.date_added = datetime.utcnow() # Also update date on edit
 
             db.session.commit()
             flash('Password updated successfully!', 'success')
@@ -238,13 +305,63 @@ def import_passwords():
             flash('Please upload a CSV file.', 'error')
             return redirect(request.url)
 
+        imported_count = 0
+        skipped_count = 0
+        error_count = 0
+
         try:
             csv_data = file.read().decode('utf-8')
             reader = csv.DictReader(StringIO(csv_data))
-            # ... (import logic remains largely the same, just ensure it uses the background worker)
-            # For brevity, the detailed import logic is omitted but would be placed here.
-            # It should create `Passwords` objects and use `favicon_queue.put()` like `add_password`.
-            flash("Import functionality is being refactored.", "info") # Placeholder
+
+            for row in reader:
+                try:
+                    site = row.get('Site', '').strip()
+                    username = row.get('Username', '').strip()
+                    password = row.get('Password', '').strip()
+
+                    if not site or not username or not password:
+                        skipped_count += 1
+                        continue
+
+                    existing = db.session.execute(db.select(Passwords).where(
+                        Passwords.user_id == current_user.id,
+                        Passwords.site == site,
+                        Passwords.username == cipher.encrypt(username.encode()).decode()
+                    )).scalar_one_or_none()
+
+                    if existing:
+                        skipped_count += 1
+                        continue
+
+                    additional_fields_str = row.get('Additional Fields', '').strip()
+                    additional_fields_token = None
+                    if additional_fields_str:
+                        fields = []
+                        for pair in additional_fields_str.split(';'):
+                            if ':' in pair:
+                                label, value = pair.split(':', 1)
+                                fields.append({'label': label.strip(), 'value': value.strip()})
+                        if fields:
+                            additional_fields_token = cipher.encrypt(json.dumps(fields).encode()).decode()
+
+                    new_entry = Passwords(
+                        site=site,
+                        username=cipher.encrypt(username.encode()).decode(),
+                        password=cipher.encrypt(password.encode()).decode(),
+                        additional_fields=additional_fields_token,
+                        favicon=None,
+                        user_id=current_user.id
+                    )
+                    db.session.add(new_entry)
+                    db.session.flush()
+                    favicon_queue.put((new_entry.id, new_entry.site))
+                    imported_count += 1
+                except Exception:
+                    error_count += 1
+                    continue
+            
+            db.session.commit()
+            flash(f'Successfully imported {imported_count} passwords. Skipped {skipped_count} duplicates. Encountered {error_count} errors.', 'success')
             return redirect(url_for('passwords.home'))
         except Exception as e:
             flash(f'Error importing file: {str(e)}', 'error')

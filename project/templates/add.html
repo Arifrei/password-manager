@@ -32,6 +32,19 @@
       </div>
 
       <div class="mb-3">
+        <label for="category-input" class="form-label">Categories</label>
+        <div class="tag-input-wrapper">
+          <div id="tag-container" class="tag-container">
+            <!-- Selected tags will appear here -->
+          </div>
+          <input type="text" id="category-input" class="tag-input" placeholder="Add or search categories...">
+          <div id="suggestion-box" class="suggestion-box"></div>
+        </div>
+        <input type="hidden" id="categories" name="categories" value="{{ form_data.categories if form_data else '' }}">
+        <div class="form-text-description mt-2">Start typing to search or create new categories.</div>
+      </div>
+
+      <div class="mb-3">
         <div class="form-row-header">
           <label class="form-label m-0">Additional Fields (Optional)</label>
           <button type="button" id="addFieldBtn" class="btn btn-sm btn-outline-secondary">

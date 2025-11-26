@@ -6,6 +6,7 @@ from flask_wtf.csrf import CSRFProtect, generate_csrf
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
+from flask_migrate import Migrate
 from datetime import datetime, timedelta
 import threading
 
@@ -14,6 +15,7 @@ db = SQLAlchemy()
 csrf = CSRFProtect()
 limiter = Limiter(key_func=get_remote_address, storage_uri="memory://")
 login_manager = LoginManager()
+migrate = Migrate()
 
 
 def create_app():
@@ -39,17 +41,20 @@ def create_app():
     csrf.init_app(app)
     limiter.init_app(app)
     login_manager.init_app(app)
+    migrate.init_app(app, db)
     login_manager.login_view = 'auth.login'
 
     # --- Import Blueprints and Models ---
     from . import models
     from .auth import auth_bp
     from .passwords import passwords_bp
+    from .account import account_bp
     from .utils import favicon_worker
 
     # --- Register Blueprints ---
     app.register_blueprint(auth_bp)
     app.register_blueprint(passwords_bp)
+    app.register_blueprint(account_bp)
 
     # --- App Context Processors and Hooks ---
     @app.context_processor

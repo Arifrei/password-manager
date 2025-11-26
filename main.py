@@ -20,6 +20,8 @@ import requests
 from urllib.parse import urlparse, urljoin
 from io import BytesIO
 from PIL import Image
+from queue import Queue
+import threading
 import hashlib
 
 if 'app' in globals():
@@ -83,6 +85,35 @@ db.init_app(app)
 login_manager = LoginManager()
 login_manager.login_view = 'login'
 login_manager.init_app(app)
+
+
+# --- Background Favicon Fetching Setup ---
+favicon_queue = Queue()
+
+
+def favicon_worker():
+    """
+    Worker thread that processes favicon fetching jobs from a queue.
+    """
+    # Create a separate app context for the background thread
+    with app.app_context():
+        while True:
+            entry_id, site_name = favicon_queue.get()
+            if entry_id is None:  # Sentinel value to stop the worker
+                break
+
+            try:
+                filename = fetch_and_save_favicon(site_name)
+                if filename:
+                    entry = db.session.get(Passwords, entry_id)
+                    if entry:
+                        entry.favicon = filename
+                        db.session.commit()
+            except Exception as e:
+                print(f"Error in favicon worker for site '{site_name}': {e}")
+                db.session.rollback()
+            finally:
+                favicon_queue.task_done()
 
 
 class Users(db.Model, UserMixin):
@@ -276,26 +307,6 @@ def fetch_and_save_favicon(site_name):
     return None
 
 
-def get_favicon_url(site_name, entry=None):
-    """
-    Get the URL for a site's favicon.
-    If entry is provided and has a favicon, return that.
-    Otherwise, try to fetch a new one.
-    Returns the URL path or None for default icon.
-    """
-    # If entry has a favicon stored, use it
-    if entry and entry.favicon and os.path.exists(os.path.join(FAVICON_FOLDER, entry.favicon)):
-        return url_for('static', filename=f'favicons/{entry.favicon}')
-
-    # Try to fetch a new favicon
-    filename = fetch_and_save_favicon(site_name)
-    if filename:
-        return url_for('static', filename=f'favicons/{filename}')
-
-    # Return None to use default icon
-    return None
-
-
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(Users, user_id)
@@ -437,8 +448,11 @@ def home():
     # Decrypt additional fields if they exist
     additional_fields_list = [decrypt_json_or_empty(p.additional_fields) for p in info]
 
-    # Get favicon URLs for each entry
-    favicon_list = [get_favicon_url(p.site, p) for p in info]
+    # Build favicon URLs directly from the database. This is fast.
+    favicon_list = []
+    for p in info:
+        url = url_for('static', filename=f'favicons/{p.favicon}') if p.favicon else None
+        favicon_list.append(url)
 
     data = list(zip(info, username_list, password_list, additional_fields_list, favicon_list))
     return render_template('index.html', data=data)
@@ -482,19 +496,18 @@ def add_password():
                     additional_fields_json.encode()
                 ).decode()
 
-            # Fetch favicon for the site
-            favicon_filename = fetch_and_save_favicon(form['site'])
-
             new_entry = Passwords(
                 site=form['site'],
                 username=cipher.encrypt(form['username'].encode()).decode(),
                 password=cipher.encrypt(form['password'].encode()).decode(),
                 additional_fields=additional_fields_token,
-                favicon=favicon_filename,
+                favicon=None,  # Will be fetched in the background
                 user_id=current_user.id
             )
             db.session.add(new_entry)
             db.session.commit()
+            # Add a job to the background queue to fetch the favicon
+            favicon_queue.put((new_entry.id, new_entry.site))
             return redirect(url_for('home'))
     return render_template('add.html')
 
@@ -625,10 +638,13 @@ def edit_password(entry_id):
             else:
                 entry.additional_fields = None
 
+            original_site = entry.site
+            entry.site = form['site'] # Update site name now
+
             # Update favicon if site name changed
-            if entry.site != form['site']:
-                favicon_filename = fetch_and_save_favicon(form['site'])
-                entry.favicon = favicon_filename
+            if original_site != entry.site:
+                entry.favicon = None  # Reset favicon, will be fetched in background
+                favicon_queue.put((entry.id, entry.site))
 
             db.session.commit()
             flash('Password updated successfully!', 'success')
@@ -819,20 +835,20 @@ def import_passwords():
                             additional_fields_json = json.dumps(additional_fields)
                             additional_fields_encrypted = cipher.encrypt(additional_fields_json.encode())
 
-                    # Fetch favicon for imported site
-                    favicon_filename = fetch_and_save_favicon(site)
-
                     # Create new password entry
                     new_entry = Passwords(
                         site=site,
                         username=cipher.encrypt(username.encode()),
                         password=cipher.encrypt(password.encode()),
                         additional_fields=additional_fields_encrypted,
-                        favicon=favicon_filename,
+                        favicon=None,  # Will be fetched in background
                         user_id=current_user.id
                     )
 
                     db.session.add(new_entry)
+                    # Flush to get the ID for the new entry before committing
+                    db.session.flush()
+                    favicon_queue.put((new_entry.id, new_entry.site))
                     imported_count += 1
 
                 except Exception as e:
@@ -922,6 +938,11 @@ if __name__ == "__main__":
     # Create tables if they don't exist
     with app.app_context():
         db.create_all()
+
+    # Start the background favicon worker thread
+    worker_thread = threading.Thread(target=favicon_worker, daemon=True)
+    worker_thread.start()
+    print("Background favicon worker started.")
 
     # Use environment variable for debug mode (default: False for production)
     debug_mode = os.getenv("FLASK_DEBUG", "False").lower() == "true"

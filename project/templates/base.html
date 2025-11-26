@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Password Manager</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-container">
+      <a class="navbar-brand" href="{% if current_user.is_authenticated %}{{ url_for('passwords.home') }}{% else %}{{ url_for('passwords.welcome') }}{% endif %}">🔐 Password Manager</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon">☰</span>
+      </button>
+      <div class="navbar-collapse justify-content-end" id="navbarNav">
+        <div class="d-flex gap-2">
+          {% if current_user.is_authenticated %}
+            <a class="btn btn-light" href="{{ url_for('passwords.home') }}">Home</a>
+            <a class="btn btn-light" href="{{ url_for('auth.logout') }}">Logout</a>
+          {% else %}
+            <a class="btn btn-light" href="{{ url_for('auth.login') }}">Login</a>
+            <a class="btn btn-light" href="{{ url_for('passwords.example') }}">Example Page</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </nav>
+  <div class="container">
+    {% block content %}{% endblock %}
+  </div>
+
+  {% if current_user.is_authenticated %}
+  <!-- Session Timeout Modal -->
+  <div id="timeoutModal" class="modal">
+    <div class="modal-content">
+      <h3>Session Expired</h3>
+      <p>Your session has expired due to inactivity.</p>
+      <p class="modal-subtext">You will be redirected to the login page.</p>
+      <div class="modal-buttons">
+        <button id="timeoutOkBtn" class="btn btn-primary">OK</button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

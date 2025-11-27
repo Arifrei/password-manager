@@ -1,29 +1,30 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<!-- Header with title and controls -->
-<h1 class="page-title">Password Manager</h1>
-
-<div class="page-controls">
-  <div class="controls-left">
-    <!-- Search Bar -->
-    <div class="search-bar">
-      <div class="search-bar-inner">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#667eea" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="8"></circle>
-          <path d="m21 21-4.35-4.35"></path>
+<!-- Header with Search Bar -->
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; width: 100%; max-width: 1100px; margin-left: auto; margin-right: auto;">
+  <h1 style="margin: 0; font-size: 2rem; color: white;">Password Manager</h1>
+  <div class="search-bar" style="margin: 0;">
+    <div class="search-bar-inner">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#667eea" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"></circle>
+        <path d="m21 21-4.35-4.35"></path>
+      </svg>
+      <input type="text" id="searchInput" class="search-input" placeholder="Search passwords...">
+      <span id="searchCount" class="search-count"></span>
+      <button id="clearSearch" class="clear-search-btn">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
-        <input type="text" id="searchInput" class="search-input" placeholder="Search passwords...">
-        <span id="searchCount" class="search-count"></span>
-        <button id="clearSearch" class="clear-search-btn">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
-      </div>
+      </button>
     </div>
+  </div>
+</div>
 
+<!-- Controls Row -->
+<div class="page-controls" style="max-width: 1100px; margin-left: auto; margin-right: auto;">
+  <div class="controls-left">
     <!-- Category Filter Dropdown -->
     <div class="dropdown-wrapper">
       <a href="{{ url_for('passwords.home') }}" class="btn btn-outline-secondary btn-with-icon">
@@ -61,44 +62,33 @@
   </div>
 
   <div class="controls-right">
-    <!-- Import Button -->
-    <a href="{{ url_for('passwords.import_passwords') }}" class="btn btn-outline-secondary btn-with-icon">
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-        <polyline points="7 10 12 15 17 10"></polyline>
-        <line x1="12" y1="15" x2="12" y2="3"></line>
-      </svg>
-      Import
-    </a>
-
-    <!-- Export Dropdown -->
+    <!-- More Actions Dropdown -->
     <div class="dropdown-wrapper">
-      <button id="exportBtn" class="btn btn-outline-secondary btn-with-icon">
-        Export
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="6 9 12 15 18 9"></polyline>
+      <button id="moreActionsBtn" class="btn btn-outline-secondary btn-with-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-more-vertical">
+          <circle cx="12" cy="12" r="1"></circle>
+          <circle cx="12" cy="5" r="1"></circle>
+          <circle cx="12" cy="19" r="1"></circle>
         </svg>
+        More Actions
       </button>
-      <div id="exportDropdown" class="dropdown-menu">
+      <div id="moreActionsDropdown" class="dropdown-menu">
+        <a href="{{ url_for('passwords.import_passwords') }}" class="dropdown-item">Import Passwords</a>
+        <div class="dropdown-divider"></div>
         <a href="{{ url_for('passwords.export_csv') }}" class="dropdown-item">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#667eea" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <line x1="12" y1="18" x2="12" y2="12"></line>
-            <line x1="9" y1="15" x2="15" y2="15"></line>
-          </svg>
-          <span class="dropdown-item-text">CSV Format</span>
+          Export as CSV
         </a>
         <a href="{{ url_for('passwords.export_json') }}" class="dropdown-item">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#667eea" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <path d="M10 12h4"></path>
-            <path d="M10 16h4"></path>
-          </svg>
-          <span class="dropdown-item-text">JSON Format</span>
+          Export as JSON
+        </a>
+        <div class="dropdown-divider"></div>
+        <a href="{{ url_for('categories.list_categories') }}" class="dropdown-item">
+          Manage Categories
         </a>
       </div>
+      <script>
+        document.getElementById('moreActionsBtn').addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'block' ? 'none' : 'block'; });
+      </script>
     </div>
 
     <!-- Add Password Button -->

@@ -49,12 +49,14 @@ def create_app():
     from .auth import auth_bp
     from .passwords import passwords_bp
     from .account import account_bp
+    from .categories import categories_bp
     from .utils import favicon_worker
 
     # --- Register Blueprints ---
     app.register_blueprint(auth_bp)
     app.register_blueprint(passwords_bp)
     app.register_blueprint(account_bp)
+    app.register_blueprint(categories_bp)
 
     # --- App Context Processors and Hooks ---
     @app.context_processor

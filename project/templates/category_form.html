@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}{{ action }} Category{% endblock %}
+
+{% block content %}
+<h1 class="title">{{ action }} Category</h1>
+
+<form method="POST">
+    <div class="form-group">
+        <label for="name">Category Name</label>
+        <input type="text" class="form-control" id="name" name="name" value="{{ category.name if category else '' }}" required>
+    </div>
+    <button type="submit" class="btn btn-primary">{{ action }} Category</button>
+</form>
+{% endblock %}

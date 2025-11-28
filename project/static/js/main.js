@@ -88,22 +88,39 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // --- Home Page Specific Functionality (index.html) ---
   if (document.querySelector('.table-container')) {
-    // View additional fields toggle
+    // --- Additional Fields Modal Logic ---
+    const fieldsModal = document.getElementById('fieldsModal');
+    const fieldsModalTitle = document.getElementById('fieldsModalTitle');
+    const fieldsModalBody = document.getElementById('fieldsModalBody');
+    const closeFieldsModal = document.getElementById('closeFieldsModal');
+    const closeFieldsModalBtn = document.getElementById('closeFieldsModalBtn');
+
+    function showFieldsModal() { fieldsModal.style.display = 'flex'; }
+    function hideFieldsModal() { fieldsModal.style.display = 'none'; }
+
     document.querySelectorAll('.view-fields-btn').forEach(btn => {
-      btn.addEventListener('click', function() {
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
         const entryId = this.getAttribute('data-entry-id');
-        const fieldsContainer = document.getElementById('fields-' + entryId);
-        if (fieldsContainer.style.display === 'none' || !fieldsContainer.style.display) {
-          fieldsContainer.style.display = 'block';
-          this.querySelector('span').textContent = 'Hide fields';
-          initializePasswordToggle(fieldsContainer); // Initialize toggles for newly visible fields
-        } else {
-          fieldsContainer.style.display = 'none';
-          const fieldCount = fieldsContainer.querySelectorAll('.additional-field-item').length;
-          this.querySelector('span').textContent = `View ${fieldCount} field${fieldCount !== 1 ? 's' : ''}`;
+        const fieldsContentWrapper = document.getElementById('fields-' + entryId);
+        const siteName = this.closest('tr').querySelector('.site-name').textContent;
+
+        if (fieldsContentWrapper && siteName) {
+          // Set modal title
+          fieldsModalTitle.textContent = `Fields for ${siteName}`;
+          // Clone the content into the modal body
+          fieldsModalBody.innerHTML = fieldsContentWrapper.innerHTML;
+          // Initialize password toggles and copy buttons for the new content in the modal
+          initializePasswordToggle(fieldsModalBody);
+          initializeCopyButtons(fieldsModalBody);
+          // Show the modal
+          showFieldsModal();
         }
       });
     });
+
+    [closeFieldsModal, closeFieldsModalBtn].forEach(el => el.addEventListener('click', hideFieldsModal));
+    window.addEventListener('click', (e) => { if (e.target === fieldsModal) hideFieldsModal(); });
 
     // Bulk operations
     const selectAllCheckbox = document.getElementById('selectAll');

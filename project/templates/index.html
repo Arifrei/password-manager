@@ -147,11 +147,13 @@
                 <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
               </svg>
             {% endif %}
-            <strong class="site-name">{{ entry.site }}</strong>
-            <div class="category-badges">
-              {% for category in entry.categories %}
-                <span class="category-badge">{{ category.name }}</span>
-              {% endfor %}
+            <div class="site-info">
+              <strong class="site-name">{{ entry.site }}</strong>
+              <div class="category-badges">
+                {% for category in entry.categories %}
+                  <span class="category-badge">{{ category.name }}</span>
+                {% endfor %}
+              </div>
             </div>
           </div>
         </td>
@@ -249,6 +251,22 @@
     <div class="modal-buttons">
       <button id="cancelDelete" class="btn btn-outline-secondary">Cancel</button>
       <button id="confirmDeleteBtn" class="btn btn-danger">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Additional Fields Modal -->
+<div id="fieldsModal" class="modal">
+  <div class="modal-content modal-lg">
+    <div class="modal-header">
+      <h3 id="fieldsModalTitle">Additional Fields</h3>
+      <button id="closeFieldsModal" class="modal-close-btn">&times;</button>
+    </div>
+    <div id="fieldsModalBody" class="modal-body">
+      <!-- Fields will be dynamically injected here -->
+    </div>
+    <div class="modal-buttons" style="margin-top: 1.5rem;">
+      <button id="closeFieldsModalBtn" class="btn btn-outline-secondary">Close</button>
     </div>
   </div>
 </div>

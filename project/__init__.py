@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from flask_migrate import Migrate
 from datetime import datetime, timedelta
 import threading
+from sqlalchemy.exc import OperationalError, PendingRollbackError
 
 # Initialize extensions
 db = SQLAlchemy()
@@ -35,6 +36,12 @@ def create_app():
     app.config['SESSION_COOKIE_SECURE'] = os.getenv("FLASK_ENV") == "production"
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
+    # --- SQLAlchemy engine options (handle Neon idle SSL disconnects) ---
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        "pool_pre_ping": True,   # verify connection before using it
+        "pool_recycle": 1800,    # recycle connections every 30 minutes (optional)
+    }
 
     # --- Initialize Extensions ---
     db.init_app(app)
@@ -69,34 +76,57 @@ def create_app():
 
     @app.before_request
     def check_session_timeout():
-        if request.endpoint and (request.endpoint.startswith('static') or request.endpoint in ['auth.login', 'auth.register', 'passwords.welcome', 'passwords.example']):
+        # allow static and public endpoints without session checks
+        if request.endpoint and (
+            request.endpoint.startswith('static')
+            or request.endpoint in ['auth.login', 'auth.register', 'passwords.welcome', 'passwords.example']
+        ):
             return
 
-        if current_user.is_authenticated:
-            last_activity = session.get('last_activity')
-            if last_activity:
-                now = datetime.now()
-                last_time = datetime.fromisoformat(last_activity)
-                inactive_duration = now - last_time
-                remember_me = session.get('remember_me', False)
-                timeout = timedelta(days=30) if remember_me else timedelta(minutes=15)
+        try:
+            if current_user.is_authenticated:
+                last_activity = session.get('last_activity')
+                if last_activity:
+                    now = datetime.now()
+                    last_time = datetime.fromisoformat(last_activity)
+                    inactive_duration = now - last_time
+                    remember_me = session.get('remember_me', False)
+                    timeout = timedelta(days=30) if remember_me else timedelta(minutes=15)
 
-                if inactive_duration > timeout:
-                    logout_user()
-                    session.clear()
-                    flash('Your session has expired due to inactivity. Please login again.', 'info')
-                    return redirect(url_for('auth.login'))
+                    if inactive_duration > timeout:
+                        logout_user()
+                        session.clear()
+                        flash('Your session has expired due to inactivity. Please login again.', 'info')
+                        return redirect(url_for('auth.login'))
 
-            session['last_activity'] = datetime.now().isoformat()
-            session.modified = True
+                session['last_activity'] = datetime.now().isoformat()
+                session.modified = True
+        except (OperationalError, PendingRollbackError):
+            # DB connection is in a bad state; rollback and treat as logged out
+            db.session.rollback()
+            logout_user()
+            session.clear()
+            return redirect(url_for('auth.login'))
 
     @app.after_request
     def add_cache_headers(response):
-        if current_user.is_authenticated and request.endpoint and not request.endpoint.startswith('static'):
-            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
-            response.headers['Pragma'] = 'no-cache'
-            response.headers['Expires'] = '-1'
+        try:
+            if current_user.is_authenticated and request.endpoint and not request.endpoint.startswith('static'):
+                response.headers['Cache-Control'] = (
+                    'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
+                )
+                response.headers['Pragma'] = 'no-cache'
+                response.headers['Expires'] = '-1'
+        except (OperationalError, PendingRollbackError):
+            # Don’t let a broken DB connection break the whole response
+            db.session.rollback()
         return response
+
+    @app.teardown_request
+    def teardown_request(exc):
+        if exc:
+            db.session.rollback()
+        db.session.remove()
 
     # --- Create Database and Start Worker ---
     with app.app_context():

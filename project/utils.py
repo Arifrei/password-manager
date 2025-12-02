@@ -1,21 +1,13 @@
 import os
-import json
 import requests
 from io import BytesIO
 from PIL import Image
 from queue import Queue
 from urllib.parse import urlparse
-from cryptography.fernet import Fernet, InvalidToken
-from json import JSONDecodeError
 from random import choice, randint, shuffle
-from dotenv import load_dotenv
 
 from . import db
 from .models import Passwords
-
-load_dotenv()
-key = os.getenv("ENCRYPTION_KEY").encode()
-cipher = Fernet(key)
 
 # --- Favicon Setup ---
 FAVICON_FOLDER = os.path.join(os.path.dirname(__file__), 'static', 'favicons')
@@ -44,39 +36,6 @@ def favicon_worker():
                 db.session.rollback()
             finally:
                 favicon_queue.task_done()
-
-
-# --- Encryption/Decryption Utilities ---
-
-def _normalize_to_bytes(token) -> bytes | None:
-    if token is None: return None
-    if isinstance(token, bytes): return token
-    if isinstance(token, memoryview): return bytes(token)
-    if isinstance(token, str) and token.startswith("\\x") and len(token) > 2:
-        try: return bytes.fromhex(token[2:])
-        except ValueError: return token.encode()
-    return str(token).encode()
-
-def decrypt_or_plain(token) -> str:
-    token_bytes = _normalize_to_bytes(token)
-    if token_bytes is None: return ""
-    try:
-        return cipher.decrypt(token_bytes).decode()
-    except InvalidToken:
-        if isinstance(token, str) and token.startswith("\\x") and len(token) > 2:
-            try: return bytes.fromhex(token[2:]).decode(errors="ignore")
-            except ValueError: pass
-        try: return token_bytes.decode(errors="ignore")
-        except Exception: return str(token)
-
-def decrypt_json_or_empty(token) -> list:
-    token_bytes = _normalize_to_bytes(token)
-    if token_bytes is None: return []
-    try:
-        decrypted = cipher.decrypt(token_bytes).decode()
-        return json.loads(decrypted)
-    except (InvalidToken, JSONDecodeError, ValueError):
-        return []
 
 
 # --- Favicon Fetching Functions ---

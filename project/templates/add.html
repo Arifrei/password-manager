@@ -5,28 +5,31 @@
 
 <div class="card">
   <div class="card-body">
-    <form method="POST" action="{{ url_for('passwords.add_password') }}" class="needs-validation" novalidate>
+    <form method="POST" action="{{ url_for('passwords.add_password') }}" class="needs-validation" novalidate data-encrypt="vault">
       <!-- CSRF token -->
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="encrypted_payload" id="encrypted_payload">
 
       <div class="mb-3">
         {% for message in get_flashed_messages() %}
           <p class="flash-message">{{ message }}</p>
         {% endfor %}
         <label for="site" class="form-label">Site or App</label>
-        <input type="text" class="form-control" id="site" name="site" placeholder="e.g., Gmail, Facebook" required value="{{ form_data.site if form_data else '' }}">
+        <input type="text" class="form-control plaintext-field" id="site" placeholder="e.g., Gmail, Facebook" required>
         <div class="invalid-feedback">Please enter the site or app name.</div>
       </div>
+
       <div class="mb-3">
         <label for="username" class="form-label">Username or Email</label>
-        <input type="text" class="form-control" id="username" name="username" placeholder="e.g., john@example.com" required value="{{ form_data.username if form_data else '' }}">
+        <input type="text" class="form-control plaintext-field" id="username" placeholder="e.g., john@example.com" required>
         <div class="invalid-feedback">Please enter the username or email.</div>
       </div>
+
       <div class="mb-3">
         <label for="password" class="form-label">Password</label>
         <div class="input-group">
-          <input type="text" class="form-control" id="password" name="password" placeholder="Enter or generate a password" required value="{{ password if password else '' }}">
-          <button type="button" class="btn btn-outline-secondary generate-password-api-btn" data-target="password">🎲 Generate</button>
+          <input type="text" class="form-control plaintext-field" id="password" placeholder="Enter or generate a password" required>
+          <button type="button" class="btn btn-outline-secondary generate-password-api-btn" data-target="password">Generate</button>
         </div>
         <div class="invalid-feedback">Please enter the password.</div>
       </div>
@@ -34,13 +37,11 @@
       <div class="mb-3">
         <label for="category-input" class="form-label">Categories</label>
         <div class="tag-input-wrapper">
-          <div id="tag-container" class="tag-container">
-            <!-- Selected tags will appear here -->
-          </div>
+          <div id="tag-container" class="tag-container"></div>
           <input type="text" id="category-input" class="tag-input" placeholder="Add or search categories...">
           <div id="suggestion-box" class="suggestion-box"></div>
         </div>
-        <input type="hidden" id="categories" name="categories" value="{{ form_data.categories if form_data else '' }}">
+        <input type="hidden" id="categories" name="categories" value="">
         <div class="form-text-description mt-2">Start typing to search or create new categories.</div>
       </div>
 
@@ -48,24 +49,17 @@
         <div class="form-row-header">
           <label class="form-label m-0">Additional Fields (Optional)</label>
           <button type="button" id="addFieldBtn" class="btn btn-sm btn-outline-secondary">
-            ➕ Add Field
+            Add Field
           </button>
         </div>
         <p class="form-text-description">
           Add 2FA codes, security questions, recovery codes, or any other important information.
         </p>
-        <div id="additionalFieldsContainer">
-          <!-- This script tag will be used by main.js to repopulate fields -->
-          {% if form_data %}
-          <script id="existing-fields-data" type="application/json">
-            {{ form_data.additional_fields | tojson }}
-          </script>
-          {% endif %}
-        </div>
+        <div id="additionalFieldsContainer"></div>
       </div>
 
       <div class="form-actions">
-        <button type="submit" name="action" value="save" class="btn btn-primary">💾 Save Password</button>
+        <button type="submit" class="btn btn-primary">Save Password</button>
         <a href="{{ url_for('passwords.home') }}" class="btn btn-outline-secondary">Cancel</a>
       </div>
     </form>

@@ -14,4 +14,4 @@ if __name__ == "__main__":
     app = create_app()
     # Use environment variable for debug mode (default: False for production)
     debug_mode = os.getenv("FLASK_DEBUG", "False").lower() == "true"
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5001, debug=True)

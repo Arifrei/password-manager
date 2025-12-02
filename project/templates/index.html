@@ -39,7 +39,6 @@
         {% endfor %}
       </div>
       <script>
-        // Simple dropdown toggle for category filter
         document.querySelector('.dropdown-wrapper .btn').addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'block' ? 'none' : 'block'; });
       </script>
     </div>
@@ -76,10 +75,10 @@
         <a href="{{ url_for('passwords.import_passwords') }}" class="dropdown-item">Import Passwords</a>
         <div class="dropdown-divider"></div>
         <a href="{{ url_for('passwords.export_csv') }}" class="dropdown-item">
-          Export as CSV
+          Export as CSV (encrypted)
         </a>
         <a href="{{ url_for('passwords.export_json') }}" class="dropdown-item">
-          Export as JSON
+          Export as JSON (encrypted)
         </a>
         <div class="dropdown-divider"></div>
         <a href="{{ url_for('categories.list_categories') }}" class="dropdown-item">
@@ -106,7 +105,7 @@
       <span id="selectedCount">0 selected</span>
       <div class="bulk-actions-buttons">
         <button id="bulkDeleteBtn" class="btn btn-danger">
-          🗑️ Delete Selected
+          Delete Selected
         </button>
         <button id="deselectAllBtn">
           Clear Selection
@@ -129,118 +128,90 @@
         <th>Action</th>
       </tr>
     </thead>
-    <tbody>
-      {% for entry, username, password, additional_fields, favicon_url in data %}
-      <tr data-entry-id="{{ entry.id }}">
-        <td>
-          <input type="checkbox" class="row-checkbox table-checkbox" data-entry-id="{{ entry.id }}" data-site="{{ entry.site }}">
-        </td>
-        <td>
-          <div class="site-cell">
-            {% if favicon_url %}
-              <img src="{{ favicon_url }}" alt="{{ entry.site }}" class="site-favicon">
-            {% else %}
-              <!-- Default icon if no favicon -->
-              <svg class="site-favicon-default" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#667eea" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="2" y1="12" x2="22" y2="12"></line>
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-              </svg>
-            {% endif %}
-            <div class="site-info">
-              <strong class="site-name">{{ entry.site }}</strong>
-              <div class="category-badges">
-                {% for category in entry.categories %}
-                  <span class="category-badge">{{ category.name }}</span>
-                {% endfor %}
-              </div>
-            </div>
-          </div>
-        </td>
-        <td>
-          <div class="text-with-copy">
-            <span class="text-value">{{ username }}</span>
-            <button type="button" class="copy-btn btn-icon-inline" data-copy="{{ username }}" data-type="username" title="Copy username">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-              </svg>
-            </button>
-          </div>
-        </td>
-        <td>
-          <div class="password-input-wrapper">
-            <input type="password" class="form-control password-field" value="{{ password }}" readonly>
-            <button type="button" class="btn-icon-inline toggle-password-btn" title="Show/Hide password">
-              <svg class="icon-show" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                <circle cx="12" cy="12" r="3"></circle>
-              </svg>
-              <svg class="icon-hide" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-                <line x1="1" y1="1" x2="23" y2="23"></line>
-              </svg>
-            </button>
-            <button type="button" class="btn-icon-inline copy-btn" data-copy="{{ password }}" data-type="password" title="Copy password" style="right: 0.5rem;">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-              </svg>
-            </button>
-          </div>
-        </td>
-        <td>
-          {% if additional_fields %}
-            <button type="button" class="view-fields-btn" data-entry-id="{{ entry.id }}">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                <circle cx="12" cy="12" r="3"></circle>
-              </svg>
-              <span>View {{ additional_fields|length }} field{{ 's' if additional_fields|length != 1 else '' }}</span>
-            </button>
-            <!-- Hidden fields container -->
-            <div id="fields-{{ entry.id }}" class="fields-container">
-              <div class="fields-wrapper">
-                {% for field in additional_fields %}
-                  <div class="additional-field-item">
-                    <div class="additional-field-content">
-                      <div class="additional-field-label">{{ field.label }}</div>
-                      <div class="password-input-wrapper">
-                        <input type="password" class="additional-field-value-input" value="{{ field.value }}" readonly>
-                        <button type="button" class="btn-icon-inline toggle-password-btn" title="Show/Hide field value">
-                          <svg class="icon-show" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                          <svg class="icon-hide" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
-                        </button>
-                        <button type="button" class="copy-btn btn-icon-inline" data-copy="{{ field.value }}" data-type="field" title="Copy {{ field.label }}" style="right: 0.5rem;">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                {% endfor %}
-              </div>
-            </div>
-          {% else %}
-            <span class="no-fields-placeholder">—</span>
-          {% endif %}
-        </td>
-        <td>
-          <div class="action-buttons">
-            <a href="{{ url_for('passwords.edit_password', entry_id=entry.id) }}" class="btn-icon-action" title="Edit">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-            </a>
-            <a href="#" class="delete-btn btn-icon-action" data-entry-id="{{ entry.id }}" data-site="{{ entry.site }}" title="Delete">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-            </a>
-          </div>
-        </td>
+    <tbody id="vaultRows">
+      <tr class="loading-row">
+        <td colspan="6">Decrypting your vault securely in your browser...</td>
       </tr>
-      {% endfor %}
     </tbody>
   </table>
+
+  <template id="vaultRowTemplate">
+    <tr data-entry-id="">
+      <td>
+        <input type="checkbox" class="row-checkbox table-checkbox" data-entry-id="" data-site="">
+      </td>
+      <td>
+        <div class="site-cell">
+          <img class="site-favicon" src="" alt="" style="display:none;" width="24" height="24">
+          <svg class="site-favicon-default" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#667eea" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="2" y1="12" x2="22" y2="12"></line>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+          </svg>
+          <div class="site-info">
+            <strong class="site-name"></strong>
+            <div class="category-badges"></div>
+          </div>
+        </div>
+      </td>
+      <td>
+        <div class="text-with-copy">
+          <span class="text-value"></span>
+          <button type="button" class="copy-btn btn-icon-inline" data-copy="" data-type="username" title="Copy username">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+          </button>
+        </div>
+      </td>
+      <td>
+        <div class="password-input-wrapper">
+          <input type="password" class="form-control password-field" value="" readonly>
+          <button type="button" class="btn-icon-inline toggle-password-btn" title="Show/Hide password">
+            <svg class="icon-show" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <svg class="icon-hide" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+              <line x1="1" y1="1" x2="23" y2="23"></line>
+            </svg>
+          </button>
+          <button type="button" class="btn-icon-inline copy-btn" data-copy="" data-type="password" title="Copy password" style="right: 0.5rem;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+          </button>
+        </div>
+      </td>
+      <td class="additional-fields-cell">
+        <button type="button" class="view-fields-btn" data-entry-id="">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+          <span class="field-count-text"></span>
+        </button>
+        <span class="no-fields-placeholder" style="display:none;">—</span>
+        <div class="fields-container" id="">
+          <div class="fields-wrapper"></div>
+        </div>
+      </td>
+      <td>
+        <div class="action-buttons">
+          <a href="#" class="btn-icon-action edit-link" title="Edit">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+          </a>
+          <a href="#" class="delete-btn btn-icon-action" data-entry-id="" data-site="" title="Delete">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+          </a>
+        </div>
+      </td>
+    </tr>
+  </template>
+
 </div>
 
 <!-- Delete Confirmation Modal -->
@@ -273,7 +244,7 @@
 
 <!-- Toast Notification -->
 <div id="toast" class="toast">
-  ✓ Copied to clipboard!
+  Copied to clipboard!
 </div>
 
 {% endblock %}

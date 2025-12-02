@@ -11,7 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body>
+<body data-user-salt="{{ current_user.encryption_salt if current_user.is_authenticated else '' }}">
   <nav class="navbar">
     <div class="nav-container" style="max-width: 1100px; margin-left: auto; margin-right: auto;">
       <a class="navbar-brand" href="{% if current_user.is_authenticated %}{{ url_for('passwords.home') }}{% else %}{{ url_for('passwords.welcome') }}{% endif %}">🔐 Password Manager</a>

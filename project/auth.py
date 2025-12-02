@@ -1,7 +1,10 @@
-from flask import Blueprint, render_template, request, flash, redirect, url_for, session
-from werkzeug.security import generate_password_hash, check_password_hash
-from flask_login import login_user, logout_user
+import base64
+import os
 from datetime import datetime, timedelta
+
+from flask import Blueprint, render_template, request, flash, redirect, url_for, session, jsonify
+from werkzeug.security import generate_password_hash, check_password_hash
+from flask_login import login_user, logout_user, login_required, current_user
 
 from . import db, limiter
 from .models import Users
@@ -25,17 +28,20 @@ def register():
             return redirect(url_for('auth.login'))
 
         password = generate_password_hash(form['password'])
+        salt = form.get('encryption_salt') or base64.urlsafe_b64encode(os.urandom(16)).decode()
         new_user = Users(
             name=form['name'],
             email=email_lowercase,
-            password=password
+            password=password,
+            encryption_salt=salt
         )
         db.session.add(new_user)
         db.session.commit()
         login_user(new_user)
         return redirect(url_for('passwords.home'))
 
-    return render_template('register.html')
+    registration_salt = base64.urlsafe_b64encode(os.urandom(16)).decode()
+    return render_template('register.html', registration_salt=registration_salt)
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])
@@ -64,6 +70,28 @@ def login():
             return redirect(url_for('passwords.home'))
 
     return render_template('login.html')
+
+
+@auth_bp.route("/auth/salt")
+@limiter.limit("30 per hour")
+def fetch_user_salt():
+    """Return the per-user salt so the browser can derive the vault key client-side."""
+    email = request.args.get('email', '').lower().strip()
+    if not email:
+        return jsonify({"salt": None}), 400
+
+    user = db.session.execute(
+        db.select(Users).where(Users.email == email)
+    ).scalar()
+
+    return jsonify({"salt": user.encryption_salt if user else None})
+
+
+@auth_bp.route("/api/encryption-salt")
+@login_required
+def current_user_salt():
+    """Expose the salt for the logged-in user for client-side key derivation."""
+    return jsonify({"salt": current_user.encryption_salt})
 
 
 @auth_bp.route("/logout")

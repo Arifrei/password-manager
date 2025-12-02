@@ -5,7 +5,7 @@
 
 <div class="card">
   <div class="card-body">
-    <h5 class="mb-4">Upload CSV File</h5>
+    <h5 class="mb-4">Upload Encrypted JSON Export</h5>
     
     {% for message in get_flashed_messages() %}
       <p class="flash-message">{{ message }}</p>
@@ -15,33 +15,24 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       
       <div class="mb-3">
-        <label class="form-label">Select CSV File</label>
-        <input type="file" class="form-control" name="file" accept=".csv" required>
+        <label class="form-label">Select JSON File</label>
+        <input type="file" class="form-control" name="file" accept=".json" required>
         <div class="form-text-description mt-2">
-          CSV file must have columns: Site, Username, Password, Additional Fields (optional)
+          Upload the encrypted JSON you previously exported. The server never sees plaintext secrets.
         </div>
       </div>
 
-      <div class="import-example-box">
-        <h6 class="import-example-header">📋 CSV Format Example:</h6>
-        <pre class="import-example-pre"><code>Site,Username,Password,Additional Fields
-Gmail,john@example.com,MyPass123,2FA Code: ABC123; Recovery: backup@example.com
-Facebook,johndoe,SecurePass!,
-Twitter,@john,Tw1tt3r#Pass,Security Q1: Pet name - Fluffy</code></pre>
-      </div>
-
       <div class="import-notes">
-        <h6 class="import-notes-header">⚠️ Important Notes:</h6>
+        <h6 class="import-notes-header">Important Notes:</h6>
         <ul class="import-notes-list">
-          <li>Duplicate entries (same site + username) will be skipped.</li>
-          <li>Rows with missing required fields (Site, Username, or Password) will be skipped.</li>
-          <li>Additional Fields format: <code>Label: Value; Label2: Value2</code>.</li>
-          <li>All passwords will be encrypted before storing.</li>
+          <li>Imports expect the encrypted export format generated from this app.</li>
+          <li>All encryption/decryption stays in the browser; the server only stores encrypted blobs.</li>
+          <li>Categories are optional and stored separately from the encrypted payload.</li>
         </ul>
       </div>
 
       <div class="form-actions">
-        <button type="submit" class="btn btn-primary">📥 Import Passwords</button>
+        <button type="submit" class="btn btn-primary">Import Passwords</button>
         <a href="{{ url_for('passwords.home') }}" class="btn btn-outline-secondary">Cancel</a>
       </div>
     </form>

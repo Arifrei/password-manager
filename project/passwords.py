@@ -1,7 +1,9 @@
-import json
+import os
 import csv
-from io import StringIO
+import json
 from datetime import datetime
+from io import StringIO
+
 from flask import (
     Blueprint, render_template, request, flash, redirect, url_for, make_response, session, jsonify
 )
@@ -9,12 +11,9 @@ from flask_login import login_required, current_user
 from werkzeug.security import check_password_hash
 from sqlalchemy import desc
 
-from . import db
+from . import db, csrf
 from .models import Passwords, Category
-from .utils import (
-    decrypt_or_plain, decrypt_json_or_empty, pass_generator,
-    favicon_queue, cipher
-)
+from .utils import pass_generator, fetch_and_save_favicon, get_favicon_filename, FAVICON_FOLDER
 
 passwords_bp = Blueprint('passwords', __name__)
 
@@ -31,41 +30,195 @@ def welcome():
 def home():
     category_filter = request.args.get('category')
     sort_by = request.args.get('sort', 'site')  # Default to sorting by site
-    
-    query = db.select(Passwords).where(Passwords.user_id == current_user.id)
 
-    if category_filter:
-        query = query.join(Passwords.categories).where(Category.name == category_filter)
-
-    # Apply sorting - ensuring we have a default order
-    if sort_by == 'date_added':
-        query = query.order_by(desc(Passwords.date_added))
-    else:
-        query = query.order_by(Passwords.site)
-
-    # Add a secondary sort for consistency
-    if sort_by != 'site':
-        query = query.order_by(Passwords.site)
-
-    info = db.session.execute(query).scalars().unique().all()
-    username_list = [decrypt_or_plain(p.username) for p in info]
-    password_list = [decrypt_or_plain(p.password) for p in info]
-    additional_fields_list = [decrypt_json_or_empty(p.additional_fields) for p in info]
-    favicon_list = [url_for('static', filename=f'favicons/{p.favicon}') if p.favicon else None for p in info]
-
-    # Fetch all categories for the filter dropdown
+    # Fetch all categories for the filter dropdown (category names are not secret metadata)
     all_user_categories = db.session.execute(
         db.select(Category.name).where(Category.user_id == current_user.id).distinct().order_by(Category.name)
     ).scalars().all()
 
-    data = list(zip(info, username_list, password_list, additional_fields_list, favicon_list))
     return render_template(
         'index.html',
-        data=data,
+        data=[],  # data is now provided client-side after decryption
         categories=all_user_categories,
         current_filter=category_filter,
         current_sort=sort_by
     )
+
+
+@passwords_bp.route("/api/vault")
+@login_required
+def get_vault():
+    """Return encrypted vault entries for the current user."""
+    entries = db.session.execute(
+        db.select(Passwords).where(Passwords.user_id == current_user.id).order_by(desc(Passwords.date_added))
+    ).scalars().all()
+
+    payload = [
+        {
+            "id": entry.id,
+            "encrypted_payload": entry.encrypted_payload,
+            "categories": [c.name for c in entry.categories],
+            "date_added": entry.date_added.isoformat()
+        } for entry in entries if entry.encrypted_payload
+    ]
+    return jsonify(payload)
+
+
+@passwords_bp.route("/api/vault/<int:entry_id>")
+@login_required
+def get_vault_entry(entry_id):
+    entry = db.get_or_404(Passwords, entry_id)
+    if entry.user_id != current_user.id:
+        return jsonify({"error": "Unauthorized"}), 403
+    if not entry.encrypted_payload:
+        return jsonify({"error": "Entry is missing encrypted payload"}), 400
+    return jsonify({
+        "id": entry.id,
+        "encrypted_payload": entry.encrypted_payload,
+        "categories": [c.name for c in entry.categories],
+        "date_added": entry.date_added.isoformat()
+    })
+
+
+@passwords_bp.route("/api/vault", methods=["POST"])
+@login_required
+@csrf.exempt
+def create_vault_entry():
+    data = request.get_json(silent=True) or {}
+    encrypted_payload = data.get("encrypted_payload")
+    if not encrypted_payload:
+        return jsonify({"error": "Missing encrypted_payload"}), 400
+
+    category_names = data.get("categories", [])
+    password_categories = []
+    for cat_name in category_names:
+        category = db.session.execute(db.select(Category).where(
+            Category.user_id == current_user.id,
+            Category.name == cat_name
+        )).scalar_one_or_none()
+        if not category:
+            category = Category(name=cat_name, user_id=current_user.id)
+            db.session.add(category)
+        password_categories.append(category)
+
+    new_entry = Passwords(
+        site=None,
+        username=None,
+        password=None,
+        additional_fields=None,
+        favicon=None,
+        encrypted_payload=encrypted_payload,
+        user_id=current_user.id
+    )
+    new_entry.categories = password_categories
+    db.session.add(new_entry)
+    db.session.commit()
+
+    # optional favicon fetch in background if site name present in payload
+    site_hint = data.get("site", "")
+    if site_hint:
+        fetch_and_save_favicon(site_hint)
+        new_entry.favicon = get_favicon_filename(site_hint)
+        db.session.commit()
+
+    return jsonify({
+        "id": new_entry.id,
+        "categories": [c.name for c in new_entry.categories],
+        "date_added": new_entry.date_added.isoformat(),
+        "encrypted_payload": encrypted_payload
+    }), 201
+
+
+@passwords_bp.route("/api/vault/<int:entry_id>", methods=["PUT"])
+@login_required
+@csrf.exempt
+def update_vault_entry(entry_id):
+    entry = db.get_or_404(Passwords, entry_id)
+    if entry.user_id != current_user.id:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    data = request.get_json(silent=True) or {}
+    encrypted_payload = data.get("encrypted_payload")
+    if not encrypted_payload:
+        return jsonify({"error": "Missing encrypted_payload"}), 400
+
+    entry.encrypted_payload = encrypted_payload
+    entry.site = None
+    entry.username = None
+    entry.password = None
+    entry.additional_fields = None
+    entry.date_added = datetime.utcnow()
+
+    entry.categories.clear()
+    category_names = data.get("categories", [])
+    for cat_name in category_names:
+        category = db.session.execute(db.select(Category).where(
+            Category.user_id == current_user.id,
+            Category.name == cat_name
+        )).scalar_one_or_none()
+        if not category:
+            category = Category(name=cat_name, user_id=current_user.id)
+            db.session.add(category)
+        entry.categories.append(category)
+
+    site_hint = data.get("site", "")
+    if site_hint:
+        fetch_and_save_favicon(site_hint)
+        entry.favicon = get_favicon_filename(site_hint)
+
+    db.session.commit()
+    return jsonify({
+        "id": entry.id,
+        "categories": [c.name for c in entry.categories],
+        "date_added": entry.date_added.isoformat(),
+        "encrypted_payload": entry.encrypted_payload
+    })
+
+
+@passwords_bp.route("/api/vault/<int:entry_id>", methods=["DELETE"])
+@login_required
+@csrf.exempt
+def delete_vault_entry(entry_id):
+    entry = db.get_or_404(Passwords, entry_id)
+    if entry.user_id != current_user.id:
+        return jsonify({"error": "Unauthorized"}), 403
+    db.session.delete(entry)
+    db.session.commit()
+    return jsonify({"deleted": True, "id": entry_id})
+
+
+@passwords_bp.route("/api/vault/bulk-delete", methods=["POST"])
+@login_required
+@csrf.exempt
+def bulk_delete_vault():
+    data = request.get_json(silent=True) or {}
+    ids = data.get("ids", [])
+    if not isinstance(ids, list) or not ids:
+        return jsonify({"deleted": 0})
+    deleted_count = db.session.query(Passwords).filter(
+        Passwords.id.in_(ids),
+        Passwords.user_id == current_user.id
+    ).delete(synchronize_session=False)
+    db.session.commit()
+    return jsonify({"deleted": deleted_count})
+
+
+@passwords_bp.route("/api/favicon")
+@login_required
+def favicon_api():
+    """Return a cached favicon URL for a site, fetching and storing it if missing."""
+    site = request.args.get("site", "").strip()
+    if not site:
+        return jsonify({"url": None})
+
+    filename = get_favicon_filename(site)
+    filepath = os.path.join(FAVICON_FOLDER, filename)
+    if not os.path.exists(filepath):
+        fetch_and_save_favicon(site)
+
+    if os.path.exists(filepath):
+        return jsonify({"url": url_for('static', filename=f'favicons/{filename}')})
+    return jsonify({"url": None})
 
 
 @passwords_bp.route("/add-password", methods=["GET", "POST"])
@@ -73,61 +226,38 @@ def home():
 def add_password():
     if request.method == "POST":
         form = request.form
-        action = form.get("action", "save")
+        encrypted_payload = form.get("encrypted_payload")
+        if not encrypted_payload:
+            flash('Missing encrypted payload. Please try again.', 'error')
+            return render_template('add.html', form_data=form)
 
-        if action == "save":
-            # Check for duplicates before adding
-            existing_entry = db.session.execute(db.select(Passwords).where(
-                Passwords.user_id == current_user.id,
-                Passwords.site == form['site'],
-                Passwords.username == cipher.encrypt(form['username'].encode()).decode()
-            )).scalar_one_or_none()
+        # Handle categories (category names remain plaintext metadata)
+        category_names = [name.strip() for name in form.get('categories', '').split(',') if name.strip()]
+        password_categories = []
+        if category_names:
+            for cat_name in category_names:
+                category = db.session.execute(db.select(Category).where(
+                    Category.user_id == current_user.id,
+                    Category.name == cat_name
+                )).scalar_one_or_none()
+                if not category:
+                    category = Category(name=cat_name, user_id=current_user.id)
+                    db.session.add(category)
+                password_categories.append(category)
 
-            if existing_entry:
-                flash('An entry for this site and username already exists.', 'error')
-                return render_template('add.html', form_data=form)
-
-            additional_fields = []
-            field_index = 0
-            while f'field_label_{field_index}' in form:
-                label = form.get(f'field_label_{field_index}')
-                value = form.get(f'field_value_{field_index}')
-                if label and value:
-                    additional_fields.append({'label': label, 'value': value})
-                field_index += 1
-
-            additional_fields_token = None
-            if additional_fields:
-                additional_fields_json = json.dumps(additional_fields)
-                additional_fields_token = cipher.encrypt(additional_fields_json.encode()).decode()
-
-            # Handle categories
-            category_names = [name.strip() for name in form.get('categories', '').split(',') if name.strip()]
-            password_categories = []
-            if category_names:
-                for cat_name in category_names:
-                    category = db.session.execute(db.select(Category).where(
-                        Category.user_id == current_user.id,
-                        Category.name == cat_name
-                    )).scalar_one_or_none()
-                    if not category:
-                        category = Category(name=cat_name, user_id=current_user.id)
-                        db.session.add(category)
-                    password_categories.append(category)
-
-            new_entry = Passwords(
-                site=form['site'],
-                username=cipher.encrypt(form['username'].encode()).decode(),
-                password=cipher.encrypt(form['password'].encode()).decode(),
-                additional_fields=additional_fields_token,
-                favicon=None,
-                user_id=current_user.id
-            )
-            new_entry.categories = password_categories
-            db.session.add(new_entry)
-            db.session.commit()
-            favicon_queue.put((new_entry.id, new_entry.site))
-            return redirect(url_for('passwords.home'))
+        new_entry = Passwords(
+            site=None,
+            username=None,
+            password=None,
+            additional_fields=None,
+            favicon=None,
+            encrypted_payload=encrypted_payload,
+            user_id=current_user.id
+        )
+        new_entry.categories = password_categories
+        db.session.add(new_entry)
+        db.session.commit()
+        return redirect(url_for('passwords.home'))
 
     return render_template('add.html')
 
@@ -156,65 +286,38 @@ def edit_password(entry_id):
 
     if request.method == "POST":
         form = request.form
-        action = form.get("action")
+        encrypted_payload = request.form.get("encrypted_payload")
+        if not encrypted_payload:
+            flash('Missing encrypted payload.', 'error')
+            return render_template('edit.html', entry=entry)
 
-        if action == "verify":
-            if not check_password_hash(current_user.password, form.get('account_password', '')):
-                flash('Incorrect account password. Please try again.', 'error')
-                return render_template('edit.html', entry=entry, show_verification=True)
+        entry.encrypted_payload = encrypted_payload
+        entry.site = None
+        entry.username = None
+        entry.password = None
+        entry.additional_fields = None
 
-            return render_template(
-                'edit.html', entry=entry, verified=True,
-                current_username=decrypt_or_plain(entry.username),
-                current_password=decrypt_or_plain(entry.password),
-                additional_fields=decrypt_json_or_empty(entry.additional_fields),
-                current_categories=", ".join(c.name for c in entry.categories)
-            )
+        # Handle categories
+        entry.categories.clear()
+        category_names = [name.strip() for name in form.get('categories', '').split(',') if name.strip()]
+        if category_names:
+            for cat_name in category_names:
+                category = db.session.execute(db.select(Category).where(
+                    Category.user_id == current_user.id,
+                    Category.name == cat_name
+                )).scalar_one_or_none()
+                if not category:
+                    category = Category(name=cat_name, user_id=current_user.id)
+                    db.session.add(category)
+                entry.categories.append(category)
 
-        elif action == "save":
-            original_site = entry.site
-            entry.site = form['site']
-            entry.username = cipher.encrypt(form['username'].encode()).decode()
-            entry.password = cipher.encrypt(form['password'].encode()).decode()
+        entry.date_added = datetime.utcnow()  # Update timestamp when editing
 
-            additional_fields = []
-            field_index = 0
-            while f'field_label_{field_index}' in form:
-                label, value = form.get(f'field_label_{field_index}'), form.get(f'field_value_{field_index}')
-                if label and value:
-                    additional_fields.append({'label': label, 'value': value})
-                field_index += 1
+        db.session.commit()
+        flash('Password updated successfully!', 'success')
+        return redirect(url_for('passwords.home'))
 
-            if additional_fields:
-                entry.additional_fields = cipher.encrypt(json.dumps(additional_fields).encode()).decode()
-            else:
-                entry.additional_fields = None
-
-            # Handle categories
-            entry.categories.clear() # Clear existing categories
-            category_names = [name.strip() for name in form.get('categories', '').split(',') if name.strip()]
-            if category_names:
-                for cat_name in category_names:
-                    category = db.session.execute(db.select(Category).where(
-                        Category.user_id == current_user.id,
-                        Category.name == cat_name
-                    )).scalar_one_or_none()
-                    if not category:
-                        category = Category(name=cat_name, user_id=current_user.id)
-                        db.session.add(category)
-                    entry.categories.append(category)
-
-
-            if original_site != entry.site:
-                entry.favicon = None
-                favicon_queue.put((entry.id, entry.site))
-            entry.date_added = datetime.utcnow() # Also update date on edit
-
-            db.session.commit()
-            flash('Password updated successfully!', 'success')
-            return redirect(url_for('passwords.home'))
-
-    return render_template('edit.html', entry=entry, show_verification=True)
+    return render_template('edit.html', entry=entry)
 
 
 @passwords_bp.route("/delete/<int:entry_id>")
@@ -225,6 +328,17 @@ def delete_entry(entry_id):
         db.session.delete(entry_to_delete)
         db.session.commit()
     return redirect(url_for('passwords.home'))
+
+
+@passwords_bp.route("/api/verify-account-password", methods=["POST"])
+@login_required
+@csrf.exempt
+def verify_account_password():
+    data = request.get_json(silent=True) or {}
+    pwd = data.get("password", "")
+    if not pwd or not check_password_hash(current_user.password, pwd):
+        return jsonify({"ok": False}), 400
+    return jsonify({"ok": True})
 
 
 @passwords_bp.route("/bulk-delete", methods=["POST"])
@@ -258,16 +372,20 @@ def export_csv():
     entries = db.session.execute(db.select(Passwords).where(Passwords.user_id == current_user.id)).scalars().all()
     output = StringIO()
     writer = csv.writer(output)
-    writer.writerow(['Site', 'Username', 'Password', 'Additional Fields'])
+    writer.writerow(['Id', 'EncryptedPayload', 'Categories'])
 
     for entry in entries:
-        fields = decrypt_json_or_empty(entry.additional_fields)
-        fields_str = '; '.join([f"{f['label']}: {f['value']}" for f in fields])
-        writer.writerow([entry.site, decrypt_or_plain(entry.username), decrypt_or_plain(entry.password), fields_str])
+        if not entry.encrypted_payload:
+            continue
+        writer.writerow([
+            entry.id,
+            entry.encrypted_payload,
+            ";".join([c.name for c in entry.categories])
+        ])
 
     output.seek(0)
     response = make_response(output.getvalue())
-    response.headers['Content-Disposition'] = 'attachment; filename=passwords_export.csv'
+    response.headers['Content-Disposition'] = 'attachment; filename=passwords_export_encrypted.csv'
     response.headers['Content-Type'] = 'text/csv'
     return response
 
@@ -280,15 +398,15 @@ def export_json():
         'exported_at': datetime.now().isoformat(),
         'passwords': [
             {
-                'site': entry.site,
-                'username': decrypt_or_plain(entry.username),
-                'password': decrypt_or_plain(entry.password),
-                'additional_fields': decrypt_json_or_empty(entry.additional_fields)
-            } for entry in entries
+                'id': entry.id,
+                'encrypted_payload': entry.encrypted_payload,
+                'categories': [c.name for c in entry.categories],
+                'date_added': entry.date_added.isoformat()
+            } for entry in entries if entry.encrypted_payload
         ]
     }
     response = make_response(json.dumps(export_data, indent=2))
-    response.headers['Content-Disposition'] = 'attachment; filename=passwords_export.json'
+    response.headers['Content-Disposition'] = 'attachment; filename=passwords_export_encrypted.json'
     response.headers['Content-Type'] = 'application/json'
     return response
 
@@ -301,67 +419,55 @@ def import_passwords():
             flash('No file selected.', 'error')
             return redirect(request.url)
         file = request.files['file']
-        if not file.filename.endswith('.csv'):
-            flash('Please upload a CSV file.', 'error')
+        if not file.filename.endswith('.json'):
+            flash('Import now requires an encrypted JSON export.', 'error')
             return redirect(request.url)
 
         imported_count = 0
-        skipped_count = 0
         error_count = 0
 
         try:
-            csv_data = file.read().decode('utf-8')
-            reader = csv.DictReader(StringIO(csv_data))
+            json_data = json.loads(file.read().decode('utf-8'))
+            records = json_data.get('passwords', [])
 
-            for row in reader:
+            for record in records:
                 try:
-                    site = row.get('Site', '').strip()
-                    username = row.get('Username', '').strip()
-                    password = row.get('Password', '').strip()
-
-                    if not site or not username or not password:
-                        skipped_count += 1
+                    encrypted_payload = record.get('encrypted_payload')
+                    if not encrypted_payload:
+                        error_count += 1
                         continue
 
-                    existing = db.session.execute(db.select(Passwords).where(
-                        Passwords.user_id == current_user.id,
-                        Passwords.site == site,
-                        Passwords.username == cipher.encrypt(username.encode()).decode()
-                    )).scalar_one_or_none()
-
-                    if existing:
-                        skipped_count += 1
-                        continue
-
-                    additional_fields_str = row.get('Additional Fields', '').strip()
-                    additional_fields_token = None
-                    if additional_fields_str:
-                        fields = []
-                        for pair in additional_fields_str.split(';'):
-                            if ':' in pair:
-                                label, value = pair.split(':', 1)
-                                fields.append({'label': label.strip(), 'value': value.strip()})
-                        if fields:
-                            additional_fields_token = cipher.encrypt(json.dumps(fields).encode()).decode()
+                    # Categories remain optional metadata
+                    category_names = record.get('categories', [])
+                    password_categories = []
+                    for cat_name in category_names:
+                        category = db.session.execute(db.select(Category).where(
+                            Category.user_id == current_user.id,
+                            Category.name == cat_name
+                        )).scalar_one_or_none()
+                        if not category:
+                            category = Category(name=cat_name, user_id=current_user.id)
+                            db.session.add(category)
+                        password_categories.append(category)
 
                     new_entry = Passwords(
-                        site=site,
-                        username=cipher.encrypt(username.encode()).decode(),
-                        password=cipher.encrypt(password.encode()).decode(),
-                        additional_fields=additional_fields_token,
+                        site=None,
+                        username=None,
+                        password=None,
+                        additional_fields=None,
                         favicon=None,
+                        encrypted_payload=encrypted_payload,
                         user_id=current_user.id
                     )
+                    new_entry.categories = password_categories
                     db.session.add(new_entry)
-                    db.session.flush()
-                    favicon_queue.put((new_entry.id, new_entry.site))
                     imported_count += 1
                 except Exception:
                     error_count += 1
                     continue
-            
+
             db.session.commit()
-            flash(f'Successfully imported {imported_count} passwords. Skipped {skipped_count} duplicates. Encountered {error_count} errors.', 'success')
+            flash(f'Imported {imported_count} encrypted records. {error_count} errors encountered.', 'success')
             return redirect(url_for('passwords.home'))
         except Exception as e:
             flash(f'Error importing file: {str(e)}', 'error')

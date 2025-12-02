@@ -1,0 +1,175 @@
+{
+  "passwords": [
+    {
+      "id": 1,
+      "site": "clickup",
+      "username": "ari.softtrials@gmail.com",
+      "password": "gZ*!nH6o%*3Shm7ZK",
+      "additional_fields": []
+    },
+    {
+      "id": 9,
+      "site": "Hike POS",
+      "username": "ari.softtrials@gmail.com",
+      "password": "2DZMuot(1JC*",
+      "additional_fields": []
+    },
+    {
+      "id": 2,
+      "site": "Freedcamp",
+      "username": "ari.softtrials@gmail.com",
+      "password": "2#eg0Ct*53OQKH(OT",
+      "additional_fields": []
+    },
+    {
+      "id": 4,
+      "site": "Odoo",
+      "username": "ari.softtrials@gmail.com",
+      "password": "M1E9g!$E4P+IZoz",
+      "additional_fields": []
+    },
+    {
+      "id": 5,
+      "site": "SuiteDash",
+      "username": "ari.softtrials@gmail.com",
+      "password": "AwQF$MtF3@7E#G@",
+      "additional_fields": []
+    },
+    {
+      "id": 6,
+      "site": "Lightspeed",
+      "username": "ari.softtrials@gmail.com",
+      "password": "TaewWMQD5nUf5A@",
+      "additional_fields": []
+    },
+    {
+      "id": 7,
+      "site": "MicroBiz",
+      "username": "ari.softtrials@gmail.com",
+      "password": "zPUKLJiTt9ac7xH",
+      "additional_fields": []
+    },
+    {
+      "id": 10,
+      "site": "SalesBinder",
+      "username": "ari.softtrials@gmail.com",
+      "password": "Bl9wPPtw%+5u",
+      "additional_fields": []
+    },
+    {
+      "id": 11,
+      "site": "Erply POS",
+      "username": "ari.softtrials@gmail.com",
+      "password": "Cg*ba7WO5g&i",
+      "additional_fields": []
+    },
+    {
+      "id": 14,
+      "site": "Seller Snap",
+      "username": "ari.softtrials@gmail.com",
+      "password": "9r2V@hJPkCc8Fh.",
+      "additional_fields": []
+    },
+    {
+      "id": 22,
+      "site": "Mozzo ERP",
+      "username": "ari.tryouts@gmail.com",
+      "password": "1$B!GsRCD5H$*9m",
+      "additional_fields": []
+    },
+    {
+      "id": 12,
+      "site": "Helcim POS",
+      "username": "ari.softtrials@gmail.com",
+      "password": "R7xXT$m$Gdwi4!W",
+      "additional_fields": []
+    },
+    {
+      "id": 13,
+      "site": "Lansweeper",
+      "username": "ari.softtrials@gmail.com",
+      "password": "CcRG4W7WsXRALuu",
+      "additional_fields": []
+    },
+    {
+      "id": 15,
+      "site": "Tagrain",
+      "username": "ari.softtrials@gmail.com",
+      "password": "xd9O1WC0&q#*R2B",
+      "additional_fields": []
+    },
+    {
+      "id": 16,
+      "site": "Sellerboard",
+      "username": "ari.softtrials@gmail.com",
+      "password": "6ZYjaSX3$$7Kvi/",
+      "additional_fields": []
+    },
+    {
+      "id": 18,
+      "site": "Nineyard",
+      "username": "ari.softtrials@gmail.com",
+      "password": "X9M2JM%)g9%5POb",
+      "additional_fields": []
+    },
+    {
+      "id": 19,
+      "site": "Shopify POS",
+      "username": "ari.tryouts@gmail.com",
+      "password": "2qxP#5T+wP5QqRf",
+      "additional_fields": []
+    },
+    {
+      "id": 20,
+      "site": "EHopper POS",
+      "username": "ari.tryouts@gmail.com",
+      "password": "UL7bc#*l7L$Np&",
+      "additional_fields": []
+    },
+    {
+      "id": 21,
+      "site": "Square For Retail",
+      "username": "ari.tryouts@gmail.com",
+      "password": "#BYpV1Vv6O#d70)%nh",
+      "additional_fields": []
+    },
+    {
+      "id": 23,
+      "site": "Bill4Time",
+      "username": "ari.tryouts@gmail.com",
+      "password": "U%EA6(i88r+1nhb",
+      "additional_fields": []
+    },
+    {
+      "id": 24,
+      "site": "My Case",
+      "username": "ari.tryouts@gmail.com",
+      "password": "NL0ulLd(z9$sz",
+      "additional_fields": []
+    },
+    {
+      "id": 30,
+      "site": "Walmart",
+      "username": "aronf11121@gmail.com",
+      "password": "&M9iya$UpW!Z54R2",
+      "additional_fields": []
+    },
+    {
+      "id": 27,
+      "site": "Amazon",
+      "username": "aronf11121@gmail.com",
+      "password": "CG(1#YBd3XR3&4q(r",
+      "additional_fields": [
+        {
+          "label": "field",
+          "value": "value"
+        },
+        {
+          "label": "field2",
+          "value": "value2"
+        }
+      ]
+    }
+  ],
+  "count": 23
+}

@@ -57,7 +57,6 @@ def create_app():
     from .passwords import passwords_bp
     from .account import account_bp
     from .categories import categories_bp
-    from .utils import favicon_worker
 
     # --- Register Blueprints ---
     app.register_blueprint(auth_bp)
